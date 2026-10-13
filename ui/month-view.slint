@@ -1,0 +1,88 @@
+import { Palette, AppPage } from "theme-default.slint";
+import { Calendar, Chrome } from "demo-data.slint";
+import { I18n } from "i18n.slint";
+import { DateCell, PeriodGesture } from "widgets.slint";
+
+component LegendDot inherits HorizontalLayout {
+    in property <brush> color;
+    in property <string> label;
+    in property <bool> diamond: false;
+    spacing: 6px;
+    alignment: center;
+    Rectangle {
+        width: 8px;
+        height: 8px;
+        border-radius: diamond ? 0 : 4px;
+        background: color;
+    }
+    Text {
+        text: label;
+        color: Palette.text-muted;
+        font-size: 0.75rem;
+        vertical-alignment: center;
+    }
+}
+
+component MonthGrid inherits Rectangle {
+    vertical-stretch: 1;
+    horizontal-stretch: 1;
+    VerticalLayout {
+        padding: Chrome.phone ? 8px : 16px;
+        spacing: 8px;
+
+        HorizontalLayout {
+            spacing: 4px;
+            for w in Calendar.weekdays: Text {
+                text: w;
+                min-width: 0px;
+                preferred-width: 0px;
+                horizontal-stretch: 1;
+                horizontal-alignment: center;
+                color: Palette.text-muted;
+                font-size: Chrome.phone ? 0.7rem : 0.8rem;
+                font-weight: 700;
+            }
+        }
+
+        for r in 6: HorizontalLayout {
+            spacing: 4px;
+            vertical-stretch: 1;
+            for c in 7: DateCell {
+                min-width: 0px;
+                preferred-width: 0px;
+                horizontal-stretch: 1;
+                data: Calendar.cells[r * 7 + c];
+                index: r * 7 + c;
+                chosen: Calendar.selected-index == r * 7 + c;
+                held => {
+                    Calendar.select-cell(r * 7 + c);
+                    Chrome.day-list-open = true;
+                }
+                clicked => {
+                    Calendar.select-cell(r * 7 + c);
+                    Chrome.day-list-open = false;
+                    Chrome.open(AppPage.day);
+                }
+            }
+        }
+
+        HorizontalLayout {
+            padding-top: 4px;
+            spacing: Chrome.phone ? 8px : 16px;
+            LegendDot { color: Palette.mark-holiday; label: I18n.legend-holiday; }
+            LegendDot { color: Palette.mark-festival; label: I18n.legend-festival; }
+            LegendDot { color: Palette.mark-tiet-khi; label: I18n.legend-tiet-khi; diamond: true; }
+            LegendDot { color: Palette.mark-event; label: I18n.legend-event; }
+            Rectangle { horizontal-stretch: 1; }
+        }
+    }
+}
+
+export component MonthView inherits Rectangle {
+    background: Palette.bg-app;
+    vertical-stretch: 1;
+    horizontal-stretch: 1;
+    PeriodGesture {
+        MonthGrid { }
+    }
+}

@@ -1,0 +1,206 @@
+import { ScrollView } from "std-widgets.slint";
+import { Palette, TimedEvent, AppPage } from "theme-default.slint";
+import { Calendar, Chrome } from "demo-data.slint";
+import { PeriodGesture, DateTouchArea } from "widgets.slint";
+
+component WeekBlock inherits Rectangle {
+    in property <TimedEvent> ev;
+    in property <length> hour-h;
+    in property <int> start-hour;
+    border-radius: Palette.radius-sm;
+    opacity: ev.enabled ? 1 : 0.45;
+    background: ev.holiday ? Palette.bg-day-holiday : Palette.event-block;
+    Rectangle {
+        border-radius: parent.border-radius;
+        background: root.ev.holiday ? Palette.accent : Palette.text-on-event;
+        opacity: event-touch.pressed ? 0.2 : event-touch.has-hover ? 0.1 : 0;
+        animate opacity { duration: 120ms; easing: ease-out; }
+    }
+    VerticalLayout {
+        padding: 6px;
+        Text {
+            text: ev.title;
+            color: ev.holiday ? Palette.text-holiday : Palette.text-on-event;
+            font-size: 0.8rem;
+            font-weight: 600;
+            overflow: elide;
+        }
+        Text {
+            text: "\{ev.start-hour}";
+            color: ev.holiday ? Palette.text-secondary : Palette.text-on-event;
+            font-size: 0.7rem;
+            opacity: 0.85;
+        }
+    }
+    event-touch := TouchArea {
+        enabled: root.ev.id != "";
+        mouse-cursor: pointer;
+        clicked => {
+            if (root.ev.id != "") {
+                Calendar.open-event(root.ev.id);
+            }
+        }
+    }
+}
+
+export component WeekView inherits Rectangle {
+    background: Palette.bg-app;
+    vertical-stretch: 1;
+    horizontal-stretch: 1;
+    private property <length> min-hour-h: 36px;
+    private property <int> start-hour: 7;
+    private property <int> hour-count: 14;
+    // The hour grid keeps scrolling when the day does not fit. Otherwise it pages weeks.
+    private property <bool> hours-scroll: sv.visible-height / hour-count < min-hour-h;
+    private property <length> hour-h: hours-scroll ? min-hour-h : sv.visible-height / hour-count;
+    private property <length> grid-h: hours-scroll ? hour-count * min-hour-h : sv.visible-height;
+
+    function open-day(index: int) {
+        Calendar.select-week-day(index);
+        Chrome.open(AppPage.day);
+    }
+
+    VerticalLayout {
+        padding: 12px;
+        spacing: 0;
+
+        HorizontalLayout {
+            padding-bottom: 8px;
+            PeriodGesture { width: 56px; horizontal-stretch: 0; }
+            for d in 7: Rectangle {
+                horizontal-stretch: 1;
+                border-radius: Palette.radius-sm;
+                background: Calendar.week-days[d].gregorian == Calendar.selected.gregorian && Calendar.week-days[d].month == Calendar.selected.month && Calendar.week-days[d].year == Calendar.selected.year ? Palette.bg-hover : transparent;
+                border-width: Calendar.week-days[d].today ? 1px : 0;
+                border-color: Palette.mark-today;
+                Rectangle {
+                    border-radius: parent.border-radius;
+                    background: Palette.accent;
+                    opacity: date-touch.pressed ? 0.18 : date-touch.has-hover ? 0.08 : 0;
+                    animate opacity { duration: 120ms; easing: ease-out; }
+                }
+                PeriodGesture {
+                    VerticalLayout {
+                        alignment: center;
+                        Text {
+                            text: Calendar.weekdays[d];
+                            color: Palette.text-muted;
+                            font-size: 0.75rem;
+                            font-weight: 700;
+                            horizontal-alignment: center;
+                        }
+                        Text {
+                            text: Calendar.week-days[d].gregorian;
+                            font-family: Palette.font-display;
+                            font-size: 1.2rem;
+                            font-weight: 600;
+                            color: Calendar.week-days[d].today ? Palette.mark-today : Palette.text-primary;
+                            horizontal-alignment: center;
+                        }
+                        Text {
+                            text: Calendar.week-days[d].lunar;
+                            color: Palette.lunar-day;
+                            font-size: 0.75rem;
+                            horizontal-alignment: center;
+                        }
+                    }
+                    date-touch := DateTouchArea {
+                        held => {
+                            Calendar.select-week-day(d);
+                            Chrome.day-list-open = true;
+                        }
+                        double-clicked => {
+                            Chrome.day-list-open = false;
+                            root.open-day(d);
+                        }
+                    }
+                }
+            }
+        }
+
+        PeriodGesture {
+            enabled: !root.hours-scroll;
+            vertical-stretch: 1;
+            horizontal-stretch: 1;
+
+            sv := ScrollView {
+                vertical-stretch: 1;
+                mouse-drag-pan-enabled: true;
+                content-height: root.hours-scroll ? root.grid-h + 8px : root.grid-h;
+
+                Rectangle {
+                    width: 100%;
+                    height: root.grid-h;
+
+                    for h in hour-count: Rectangle {
+                        y: h * hour-h;
+                        height: hour-h;
+                        width: 100%;
+                        HorizontalLayout {
+                            Text {
+                                width: 56px;
+                                text: "\{h + start-hour}:00";
+                                color: Palette.text-muted;
+                                font-size: 0.75rem;
+                                horizontal-alignment: right;
+                            }
+                            Rectangle {
+                                horizontal-stretch: 1;
+                                border-width: 1px;
+                                border-color: Palette.rule;
+                                HorizontalLayout {
+                                    for d in 7: Rectangle {
+                                        horizontal-stretch: 1;
+                                        border-width: 1px;
+                                        border-color: Palette.rule;
+                                        background: (d == 5 || d == 6) ? Palette.bg-day-weekend : transparent;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        x: 56px;
+                        width: parent.width - 56px;
+                        height: 100%;
+                        HorizontalLayout {
+                            for d in 7: Rectangle {
+                                horizontal-stretch: 1;
+                                Rectangle {
+                                    y: Math.clamp(Math.floor(hour-touch.mouse-y / root.hour-h), 0, root.hour-count - 1) * root.hour-h;
+                                    height: root.hour-h;
+                                    width: 100%;
+                                    background: Palette.accent;
+                                    opacity: hour-touch.pressed ? 0.18 : hour-touch.has-hover ? 0.08 : 0;
+                                    animate opacity { duration: 120ms; easing: ease-out; }
+                                }
+                                hour-touch := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => {
+                                        let hour = root.start-hour + Math.clamp(Math.floor(self.mouse-y / root.hour-h), 0, root.hour-count - 1);
+                                        Calendar.select-week-day(d);
+                                        Chrome.day-list-open = false;
+                                        Calendar.open-event-sheet();
+                                        Calendar.event-start = hour < 10 ? "0\{hour}:00" : "\{hour}:00";
+                                        Calendar.event-end = hour + 1 < 10 ? "0\{hour + 1}:00" : "\{hour + 1}:00";
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    for ev in Calendar.week-events: WeekBlock {
+                        ev: ev;
+                        hour-h: hour-h;
+                        start-hour: start-hour;
+                        x: 56px + ev.day * (parent.width - 56px) / 7 + 4px;
+                        y: (ev.start-hour - start-hour) * hour-h + 2px;
+                        width: (parent.width - 56px) / 7 - 8px;
+                        height: ev.hours * hour-h - 6px;
+                    }
+                }
+            }
+        }
+    }
+}

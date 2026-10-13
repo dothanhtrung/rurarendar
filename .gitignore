@@ -1,0 +1,25 @@
+.idea/
+output/
+**/*.sqlite
+
+# Android shell (mobile/). Native libs and packaged assets are build outputs.
+mobile/local.properties
+mobile/.gradle/
+mobile/.idea/
+mobile/**/build/
+mobile/app/.cxx/
+mobile/app/src/main/jniLibs/
+mobile/app/src/main/assets/
+*.apk
+*.so
+
+target/
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+
+.DS_*
+*.log
+logs
+node_modules

@@ -1,0 +1,63 @@
+[package]
+name = "rurarendar"
+version = "0.0.1"
+authors = ["Trung Do <dothanhtrung@pm.me>"]
+edition = "2024"
+
+[dependencies]
+slint = { version = "1.18" }
+sqlx = { version = "0.9", features = ["sqlite", "runtime-tokio", "tls-rustls-ring-webpki", "time", "migrate"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+anyhow = { version = "1.0" }
+tokio = { version = "1.53", features = ["rt", "macros", "time"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "query", "rustls"] }
+argon2 = "0.6"
+chacha20poly1305 = "0.11"
+rand = { version = "0.10" }
+base64 = "0.23"
+dotenvy = "0.15"
+isolang = {version = "2.4", features = ["serde"], default-features = false}
+tracing = { version = "0.1" }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+regex = {version = "1.13", default-features = false, features = ["std", "unicode", "perf"]}
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+clap = { version = "4.6", features = ["derive"] }
+ron = "0.12"
+
+[target.'cfg(target_os = "android")'.dependencies]
+slint = {version = "1.18", features = ["backend-android-activity-06"]}
+jni = "0.22"
+ndk-context = "0.1"
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+wasm-bindgen = { version = "0.2" }
+getrandom = { version = "0.4", features = ["wasm_js"]}
+getrandom_2 = { package = "getrandom", version = "0.2", features = ["js"]}
+
+[target.'cfg(target_os = "linux")'.dependencies]
+notify-rust = "4"
+
+[build-dependencies]
+slint-build = "1.18"
+
+[lib]
+crate-type = [
+    "cdylib", # for Android & Web
+    "rlib",   # for PC
+]
+
+[profile.dev.package.sqlx-macros]
+opt-level = 3
+
+[profile.release]
+strip = true
+lto = true
+
+# TODO: This is just workaround to avoid application crash on android
+[profile.release.package.jni]
+opt-level = 0
+[profile.release.package.android-activity]
+opt-level = 0
+[profile.release.package.i-slint-backend-android-activity]
+opt-level = 0

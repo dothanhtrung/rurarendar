@@ -1,0 +1,231 @@
+import { ScrollView } from "std-widgets.slint";
+import { Palette, Theme } from "theme-default.slint";
+import { Sync } from "demo-data.slint";
+import { I18n } from "i18n.slint";
+import { Field, InkButton, SelectField } from "widgets.slint";
+
+component SettingsCard inherits Rectangle {
+    in property <string> title;
+    in property <string> body;
+    background: Palette.bg-panel;
+    border-radius: Palette.radius;
+    border-width: 1px;
+    border-color: Palette.border;
+    VerticalLayout {
+        padding: 20px;
+        spacing: 8px;
+        Text {
+            text: title;
+            font-weight: 700;
+            font-size: 1rem;
+            color: Palette.text-primary;
+        }
+        Text {
+            text: body;
+            color: Palette.text-secondary;
+            font-size: 0.9rem;
+            wrap: word-wrap;
+        }
+    }
+}
+
+export component SettingsView inherits Rectangle {
+    background: Palette.bg-app;
+
+    ScrollView {
+        width: 100%;
+        height: 100%;
+        mouse-drag-pan-enabled: true;
+
+        HorizontalLayout {
+            width: max(root.width, 1px);
+            alignment: center;
+            padding-top: 24px;
+            padding-bottom: 32px;
+            padding-left: 16px;
+            padding-right: 16px;
+
+            VerticalLayout {
+                width: min(640px, max(root.width - 32px, 280px));
+                spacing: 16px;
+                alignment: start;
+
+        Rectangle {
+            background: Palette.bg-panel;
+            border-radius: Palette.radius;
+            border-width: 1px;
+            border-color: Palette.border;
+            VerticalLayout {
+                padding: 20px;
+                spacing: 12px;
+                Text {
+                    text: I18n.sync-title;
+                    font-weight: 700;
+                    font-size: 1rem;
+                    color: Palette.text-primary;
+                }
+                Text {
+                    text: I18n.sync-body;
+                    color: Palette.text-secondary;
+                    font-size: 0.9rem;
+                    wrap: word-wrap;
+                }
+                Field {
+                    label: I18n.server;
+                    text <=> Sync.server-url;
+                }
+                Field {
+                    label: I18n.username;
+                    text <=> Sync.username;
+                }
+                Field {
+                    label: I18n.token;
+                    secret: true;
+                    text <=> Sync.token;
+                }
+                if (Sync.status != ""): Text {
+                    text: Sync.status;
+                    color: Palette.text-secondary;
+                    font-size: 0.9rem;
+                    wrap: word-wrap;
+                }
+                if (Sync.error != ""): Text {
+                    text: Sync.error;
+                    color: Palette.text-holiday;
+                    wrap: word-wrap;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    InkButton {
+                        label: I18n.save-and-sync;
+                        clicked => {
+                            Sync.save-account();
+                        }
+                    }
+                    if (Sync.logged-in): InkButton {
+                        label: I18n.sync-now;
+                        quiet: true;
+                        clicked => {
+                            Sync.sync-now();
+                        }
+                    }
+                }
+            }
+        }
+        Rectangle {
+            background: Palette.bg-panel;
+            border-radius: Palette.radius;
+            border-width: 1px;
+            border-color: Palette.border;
+            VerticalLayout {
+                padding: 20px;
+                spacing: 12px;
+                Text {
+                    text: I18n.encrypt-title;
+                    font-weight: 700;
+                    font-size: 1rem;
+                    color: Palette.text-primary;
+                }
+                Text {
+                    text: I18n.encrypt-body;
+                    color: Palette.text-secondary;
+                    font-size: 0.9rem;
+                    wrap: word-wrap;
+                }
+                Field {
+                    label: I18n.encrypt-key;
+                    secret: true;
+                    text <=> Sync.encrypt-key;
+                }
+                InkButton {
+                    label: I18n.save-key;
+                    clicked => {
+                        Sync.save-encrypt-key();
+                    }
+                }
+            }
+        }
+        Rectangle {
+            background: Palette.bg-panel;
+            border-radius: Palette.radius;
+            border-width: 1px;
+            border-color: Palette.border;
+            VerticalLayout {
+                padding: 20px;
+                spacing: 12px;
+                Text {
+                    text: I18n.language-title;
+                    font-weight: 700;
+                    font-size: 1rem;
+                    color: Palette.text-primary;
+                }
+                Text {
+                    text: I18n.language-body;
+                    color: Palette.text-secondary;
+                    font-size: 0.9rem;
+                    wrap: word-wrap;
+                }
+                SelectField {
+                    label: I18n.language-label;
+                    options: I18n.language-options;
+                    index <=> I18n.language-index;
+                    changed(i) => {
+                        I18n.language-changed(i);
+                    }
+                }
+            }
+        }
+        Rectangle {
+            background: Palette.bg-panel;
+            border-radius: Palette.radius;
+            border-width: 1px;
+            border-color: Palette.border;
+            VerticalLayout {
+                padding: 20px;
+                spacing: 12px;
+                Text {
+                    text: I18n.appearance-title;
+                    font-weight: 700;
+                    font-size: 1rem;
+                    color: Palette.text-primary;
+                }
+                Text {
+                    text: I18n.appearance-body;
+                    color: Palette.text-secondary;
+                    font-size: 0.9rem;
+                    wrap: word-wrap;
+                }
+                SelectField {
+                    label: I18n.color-scheme-label;
+                    options: ["E-ink", "Gruvbox", "Modern"];
+                    index <=> Theme.scheme-index;
+                    changed(i) => {
+                        Theme.scheme-changed(i);
+                    }
+                }
+                SelectField {
+                    label: I18n.color-mode-label;
+                    options: [I18n.mode-auto, I18n.mode-light, I18n.mode-dark];
+                    index <=> Theme.mode-index;
+                    changed(i) => {
+                        Theme.mode-changed(i);
+                    }
+                }
+            }
+        }
+        SettingsCard {
+            title: I18n.reminders-title;
+            body: I18n.reminders-body;
+        }
+        SettingsCard {
+            title: I18n.display-title;
+            body: I18n.display-body;
+        }
+        SettingsCard {
+            title: I18n.timezone-title;
+            body: I18n.timezone-body;
+        }
+            }
+        }
+    }
+}

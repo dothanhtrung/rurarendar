@@ -1,0 +1,705 @@
+import { Palette, DayCellData, ProfileRow } from "theme-default.slint";
+import { Calendar, Chrome } from "demo-data.slint";
+
+// Tracks one PopupWindow for the Android back gesture. `changed` only accepts a local name.
+export component PopupWatch inherits Rectangle {
+    in property <bool> open;
+    callback close();
+    width: 0px;
+    height: 0px;
+    private property <int> close-request: Chrome.close-popup-request;
+
+    changed open => {
+        Chrome.note-popup(root.open);
+    }
+    changed close-request => {
+        if (root.open) {
+            root.close();
+        }
+    }
+}
+
+// Vertical wheel or swipe moves to the previous or next period.
+// One mouse notch is one step. A short press still reaches the children.
+export component PeriodGesture inherits Rectangle {
+    in property <bool> enabled: true;
+
+    private property <length> carry: 0px;
+    private property <length> step: 48px;
+
+    function turn(next: bool) {
+        if (!root.enabled) {
+            return;
+        }
+        root.carry = 0px;
+        if (next) {
+            Calendar.next-period();
+        } else {
+            Calendar.prev-period();
+        }
+    }
+
+    SwipeGestureHandler {
+        enabled: root.enabled;
+        handle-swipe-up: true;
+        handle-swipe-down: true;
+        swiped => {
+            // Finger moving up reveals the next period, same as a downward wheel.
+            root.turn(self.current-position.y < self.pressed-position.y);
+        }
+
+        TouchArea {
+            enabled: root.enabled;
+            scroll-event(event) => {
+                if (!root.enabled) {
+                    return reject;
+                }
+                if ((root.carry > 0px && event.delta-y < 0px) || (root.carry < 0px && event.delta-y > 0px)) {
+                    root.carry = 0px;
+                }
+                root.carry += event.delta-y;
+                if (root.carry <= -root.step) {
+                    root.turn(true);
+                } else if (root.carry >= root.step) {
+                    root.turn(false);
+                }
+                accept
+            }
+
+            @children
+        }
+    }
+}
+
+export component IconButton inherits Rectangle {
+    in property <image> icon;
+    in property <string> tip;
+    in property <length> size: 36px;
+    in property <brush> icon-color: Palette.text-primary;
+    in property <bool> active: false;
+    callback clicked();
+
+    width: size;
+    height: size;
+    border-radius: Palette.radius-sm;
+    background: ta.has-hover || active ? Palette.bg-hover : transparent;
+    Rectangle {
+        border-radius: parent.border-radius;
+        background: Palette.accent;
+        opacity: ta.pressed ? 0.18 : 0;
+        animate opacity { duration: 120ms; easing: ease-out; }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+
+    Image {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        source: icon;
+        width: 18px;
+        height: 18px;
+        colorize: icon-color;
+    }
+
+    if (tip != ""): Tooltip {
+        text: @markdown("\{tip}");
+    }
+}
+
+export component InkButton inherits Rectangle {
+    in property <string> label;
+    in property <image> icon;
+    in property <bool> has-icon: false;
+    in property <bool> quiet: false;
+    in property <bool> accent: false;
+    callback clicked();
+
+    border-radius: Palette.radius-sm;
+    background: accent ? Palette.accent : quiet ? (ta.has-hover ? Palette.bg-hover : transparent) : Palette.ink;
+    border-width: quiet ? 1px : 0;
+    border-color: Palette.border;
+    min-height: 36px;
+    horizontal-stretch: 0;
+
+    Rectangle {
+        border-radius: parent.border-radius;
+        background: quiet ? Palette.accent : accent ? Palette.text-on-accent : Palette.text-on-ink;
+        opacity: ta.pressed ? 0.2 : ta.has-hover ? 0.08 : 0;
+        animate opacity { duration: 120ms; easing: ease-out; }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+        HorizontalLayout {
+            padding-left: 12px;
+            padding-right: 12px;
+            spacing: 8px;
+            alignment: center;
+            cross-axis-alignment: center;
+
+            if (has-icon): Image {
+                source: icon;
+                width: 16px;
+                height: 16px;
+                colorize: quiet ? Palette.text-primary : accent ? Palette.text-on-accent : Palette.text-on-ink;
+                vertical-alignment: center;
+            }
+            Text {
+                text: label;
+                color: quiet ? Palette.text-primary : accent ? Palette.text-on-accent : Palette.text-on-ink;
+                font-family: Palette.font-ui;
+                font-size: 0.9rem;
+                font-weight: 600;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
+export component ProfileNavRow inherits Rectangle {
+    in property <ProfileRow> data;
+    in property <bool> can-delete: true;
+    callback toggled();
+    callback selected();
+    callback deleted();
+    height: 36px;
+    border-radius: Palette.radius-sm;
+    background: data.active ? Palette.bg-sidebar-active : ta.has-hover ? Palette.bg-sidebar-hover : transparent;
+    Rectangle {
+        border-radius: parent.border-radius;
+        background: Palette.text-on-sidebar;
+        opacity: ta.pressed ? 0.16 : ta.has-hover ? 0.06 : 0;
+        animate opacity { duration: 120ms; easing: ease-out; }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.selected();
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 4px;
+        spacing: 8px;
+        alignment: start;
+        cross-axis-alignment: center;
+        Rectangle {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            border-width: 1px;
+            border-color: data.enabled ? Palette.accent : Palette.text-on-sidebar-muted;
+            background: data.enabled ? Palette.accent : transparent;
+            box := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    root.toggled();
+                }
+                Text {
+                    text: data.enabled ? "✓" : "";
+                    color: Palette.text-on-accent;
+                    font-size: 0.7rem;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        Text {
+            text: data.name;
+            color: Palette.text-on-sidebar;
+            font-size: 0.85rem;
+            font-weight: data.active ? 600 : 500;
+            overflow: elide;
+            horizontal-stretch: 1;
+            vertical-alignment: center;
+        }
+
+        if (can-delete): TouchArea {
+            mouse-cursor: pointer;
+            width: 22px;
+            height: 22px;
+            clicked => {
+                root.deleted();
+            }
+            Text {
+                text: "×";
+                color: Palette.text-on-sidebar-muted;
+                font-size: 1rem;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
+export component NavItem inherits Rectangle {
+    in property <string> label;
+    in property <image> icon;
+    in property <bool> selected: false;
+    callback clicked();
+
+    height: 40px;
+    border-radius: Palette.radius-sm;
+    background: selected ? Palette.bg-sidebar-active : ta.has-hover ? Palette.bg-sidebar-hover : transparent;
+
+    Rectangle {
+        border-radius: parent.border-radius;
+        background: Palette.text-on-sidebar;
+        opacity: ta.pressed ? 0.16 : ta.has-hover ? 0.06 : 0;
+        animate opacity { duration: 120ms; easing: ease-out; }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+        HorizontalLayout {
+            padding-left: 12px;
+            padding-right: 12px;
+            spacing: 12px;
+            cross-axis-alignment: center;
+            Rectangle {
+                width: 3px;
+                height: 18px;
+                border-radius: 2px;
+                background: selected ? Palette.accent : transparent;
+            }
+
+            Image {
+                source: icon;
+                width: 18px;
+                height: 18px;
+                colorize: selected ? Palette.text-on-sidebar : Palette.text-on-sidebar-muted;
+                vertical-alignment: center;
+            }
+
+            Text {
+                text: label;
+                color: selected ? Palette.text-on-sidebar : Palette.text-on-sidebar-muted;
+                font-family: Palette.font-ui;
+                font-size: 0.95rem;
+                font-weight: selected ? 600 : 500;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
+export component DateTouchArea inherits TouchArea {
+    callback held();
+    // Click released before the hold interval. A hold cancels this.
+    callback tapped();
+    private property <bool> hold-ready: false;
+    // Kept after a hold so the following release is not a tap. Cleared on the next press.
+    private property <bool> hold-consumed: false;
+
+    mouse-cursor: pointer;
+    Timer {
+        interval: 450ms;
+        running: root.pressed && !root.hold-ready;
+        triggered => {
+            root.hold-ready = true;
+            root.hold-consumed = true;
+            root.held();
+        }
+    }
+
+    pointer-event(event) => {
+        if (event.kind == PointerEventKind.down) {
+            root.hold-ready = false;
+            root.hold-consumed = false;
+        } else if (event.kind == PointerEventKind.cancel) {
+            root.hold-ready = false;
+        }
+    }
+
+    clicked => {
+        if (!root.hold-consumed) {
+            root.tapped();
+        }
+    }
+}
+
+export component DateCell inherits Rectangle {
+    in property <DayCellData> data;
+    in property <int> index;
+    in property <bool> chosen: false;
+    callback held();
+    callback clicked();
+
+    min-width: 0px;
+    preferred-width: 0px;
+    clip: true;
+    border-radius: Palette.radius-sm;
+    background: data.holiday ? Palette.bg-day-holiday : data.tiet-khi ? Palette.bg-day-tiet-khi : data.weekend ? Palette.bg-day-weekend : Palette.bg-cell;
+    opacity: data.in-month ? 1 : ta.has-hover || ta.pressed ? 0.7 : 0.42;
+    border-width: chosen ? 2px : data.today ? 1px : 0;
+    border-color: chosen ? Palette.selected-ring : Palette.mark-today;
+
+    Rectangle {
+        border-radius: parent.border-radius;
+        background: Palette.accent;
+        opacity: ta.pressed ? 0.18 : ta.has-hover ? 0.08 : 0;
+        animate opacity { duration: 120ms; easing: ease-out; }
+    }
+
+    ta := DateTouchArea {
+        held => {
+            root.held();
+        }
+        tapped => {
+            root.clicked();
+        }
+    }
+
+    VerticalLayout {
+        padding: 8px;
+        spacing: 2px;
+
+        HorizontalLayout {
+            alignment: center;
+            Text {
+                text: data.gregorian;
+                font-family: Palette.font-display;
+                font-size: 1.15rem;
+                font-weight: 600;
+                color: data.holiday ? Palette.text-holiday : data.today ? Palette.mark-today : Palette.text-primary;
+            }
+
+            Rectangle {
+                horizontal-stretch: 1;
+            }
+
+            HorizontalLayout {
+                spacing: 4px;
+                alignment: center;
+                if (data.holiday): Rectangle {
+                    width: 7px;
+                    height: 7px;
+                    border-radius: 4px;
+                    background: Palette.mark-holiday;
+                }
+                if (data.tiet-khi): Rectangle {
+                    width: 7px;
+                    height: 7px;
+                    background: Palette.mark-tiet-khi;
+                }
+                if (data.has-event && !data.holiday && !data.tiet-khi): Rectangle {
+                    width: 7px;
+                    height: 7px;
+                    border-radius: 4px;
+                    background: Palette.mark-event;
+                }
+            }
+        }
+
+        Text {
+            text: data.lunar;
+            font-family: Palette.font-ui;
+            font-size: 0.8rem;
+            color: Palette.lunar-day;
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+        }
+
+        if (data.title != ""): Text {
+            text: data.title;
+            font-family: Palette.font-ui;
+            font-size: 0.72rem;
+            color: data.holiday ? Palette.text-holiday : Palette.text-secondary;
+            overflow: elide;
+            width: 100%;
+        }
+    }
+}
+
+export component Field inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <string> label;
+    in property <bool> secret: false;
+    min-height: 60px;
+    VerticalLayout {
+        spacing: 6px;
+        Text {
+            text: label;
+            color: Palette.text-secondary;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        Rectangle {
+            border-radius: Palette.radius-sm;
+            border-width: 1px;
+            border-color: Palette.border;
+            background: Palette.bg-surface;
+            height: 36px;
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 12px;
+                TextInput {
+                    text <=> root.text;
+                    color: Palette.text-primary;
+                    font-size: 0.95rem;
+                    font-family: Palette.font-ui;
+                    single-line: true;
+                    input-type: root.secret ? InputType.password : InputType.text;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+}
+
+export component CheckRow inherits Rectangle {
+    in property <string> label;
+    in-out property <bool> checked: false;
+    callback toggled();
+    min-height: 36px;
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.checked = !root.checked;
+            root.toggled();
+        }
+    }
+
+    HorizontalLayout {
+        spacing: 10px;
+        alignment: center;
+        Rectangle {
+            width: 18px;
+            height: 18px;
+            border-radius: 4px;
+            border-width: 1px;
+            border-color: root.checked ? Palette.ink : Palette.border;
+            background: root.checked ? Palette.ink : Palette.bg-surface;
+            Text {
+                text: root.checked ? "✓" : "";
+                color: Palette.text-on-ink;
+                font-size: 0.75rem;
+                font-weight: 700;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        Text {
+            text: root.label;
+            color: Palette.text-primary;
+            font-size: 0.9rem;
+            vertical-alignment: center;
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+        }
+    }
+}
+
+export component SelectField inherits Rectangle {
+    in property <string> label;
+    in property <[string]> options;
+    in-out property <int> index: 0;
+    callback changed(int);
+    min-height: 60px;
+    VerticalLayout {
+        spacing: 6px;
+        Text {
+            text: label;
+            color: Palette.text-secondary;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        Rectangle {
+            border-radius: Palette.radius-sm;
+            border-width: 1px;
+            border-color: Palette.border;
+            background: Palette.bg-surface;
+            height: 36px;
+            ta := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    menu.show();
+                }
+            }
+
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 12px;
+                Text {
+                    text: root.options[root.index];
+                    color: Palette.text-primary;
+                    font-size: 0.95rem;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+
+                Text {
+                    text: "▾";
+                    color: Palette.text-muted;
+                    font-size: 0.85rem;
+                    vertical-alignment: center;
+                }
+            }
+
+            menu := PopupWindow {
+                close-policy: close-on-click-outside;
+                x: 0;
+                y: 40px;
+                width: root.width;
+                Rectangle {
+                    border-radius: Palette.radius-sm;
+                    border-width: 1px;
+                    border-color: Palette.border;
+                    background: Palette.bg-surface;
+                    drop-shadow-blur: 16px;
+                    drop-shadow-color: Palette.shadow;
+                    VerticalLayout {
+                        padding: 4px;
+                        for opt[i] in root.options: Rectangle {
+                            height: 32px;
+                            border-radius: 6px;
+                            background: ta-opt.has-hover || root.index == i ? Palette.bg-hover : transparent;
+                            ta-opt := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.index = i;
+                                    root.changed(i);
+                                    menu.close();
+                                }
+                            }
+
+                            HorizontalLayout {
+                                padding-left: 10px;
+                                Text {
+                                    text: opt;
+                                    color: Palette.text-primary;
+                                    font-size: 0.9rem;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            PopupWatch {
+                open: menu.is-open;
+                close => {
+                    menu.close();
+                }
+            }
+        }
+    }
+}
+
+export component EventRow inherits Rectangle {
+    in property <string> time;
+    in property <string> title;
+    in property <brush> mark: Palette.mark-event;
+    in property <bool> enabled: true;
+    in property <bool> can-delete: false;
+    in property <string> delete-label;
+    callback clicked();
+    callback delete();
+    min-height: 48px;
+    opacity: root.enabled ? 1 : 0.45;
+    border-radius: Palette.radius-sm;
+    background: ta.has-hover ? Palette.bg-hover : transparent;
+    Rectangle {
+        border-radius: parent.border-radius;
+        background: Palette.accent;
+        opacity: ta.pressed ? 0.18 : 0;
+        animate opacity { duration: 120ms; easing: ease-out; }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+
+    HorizontalLayout {
+        padding: 8px;
+        spacing: 12px;
+        alignment: space-between;
+        cross-axis-alignment: center;
+
+        HorizontalLayout {
+            alignment: start;
+            padding: 8px;
+            spacing: 12px;
+
+            Rectangle {
+                width: 4px;
+                height: 28px;
+                border-radius: 2px;
+                background: mark;
+            }
+
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 1;
+                Text {
+                    text: title;
+                    color: Palette.text-primary;
+                    font-size: 0.95rem;
+                    font-weight: 600;
+                }
+
+                Text {
+                    text: time;
+                    color: Palette.text-muted;
+                    font-size: 0.8rem;
+                }
+            }
+        }
+
+        if (can-delete): Rectangle {
+            min-height: 32px;
+            border-radius: Palette.radius-sm;
+            border-width: 1px;
+            border-color: Palette.border;
+            background: del.has-hover ? Palette.bg-hover : transparent;
+            Rectangle {
+                border-radius: parent.border-radius;
+                background: Palette.accent;
+                opacity: del.pressed ? 0.18 : 0;
+                animate opacity { duration: 120ms; easing: ease-out; }
+            }
+            del := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    root.delete();
+                }
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    alignment: center;
+                    Text {
+                        text: root.delete-label;
+                        color: Palette.text-primary;
+                        font-size: 0.8rem;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,248 @@
+import { AppPage, DayCellData, TimedEvent, DayEvent, ProfileRow, Palette } from "theme-default.slint";
+import { I18n } from "i18n.slint";
+
+export global Chrome {
+    in-out property <AppPage> page: AppPage.month;
+    in-out property <AppPage> calendar-page: AppPage.month;
+    // Fixed slots: this Slint build has no array push/remove.
+    private property <int> back-depth: 0;
+    private property <AppPage> hist0: AppPage.month;
+    private property <AppPage> hist1: AppPage.month;
+    private property <AppPage> hist2: AppPage.month;
+    private property <AppPage> hist3: AppPage.month;
+    private property <AppPage> hist4: AppPage.month;
+    private property <AppPage> hist5: AppPage.month;
+    private property <AppPage> hist6: AppPage.month;
+    private property <AppPage> hist7: AppPage.month;
+    out property <bool> can-go-back: back-depth > 0;
+    in-out property <bool> sidebar-open: true;
+    // Set from Rust on Android. Drawer overlay instead of a persistent column.
+    in-out property <bool> phone: false;
+    in-out property <bool> jump-open: false;
+    in-out property <bool> event-sheet-open: false;
+    in-out property <bool> profile-sheet-open: false;
+    // Event list for a date opened by holding that date.
+    in-out property <bool> day-list-open: false;
+    private property <int> popup-depth: 0;
+    // Bumped so each open menu closes itself. Menus live in different components.
+    in-out property <int> close-popup-request: 0;
+
+    public function note-popup(open: bool) {
+        if (open) {
+            popup-depth += 1;
+        } else if (popup-depth > 0) {
+            popup-depth -= 1;
+        }
+    }
+
+    function apply-page(next: AppPage) {
+        page = next;
+        if (next == AppPage.day || next == AppPage.week || next == AppPage.month) {
+            calendar-page = next;
+        }
+    }
+
+    function remember(current: AppPage) {
+        if (back-depth >= 8) {
+            hist0 = hist1;
+            hist1 = hist2;
+            hist2 = hist3;
+            hist3 = hist4;
+            hist4 = hist5;
+            hist5 = hist6;
+            hist6 = hist7;
+            hist7 = current;
+            return;
+        }
+        if (back-depth == 0) { hist0 = current; }
+        if (back-depth == 1) { hist1 = current; }
+        if (back-depth == 2) { hist2 = current; }
+        if (back-depth == 3) { hist3 = current; }
+        if (back-depth == 4) { hist4 = current; }
+        if (back-depth == 5) { hist5 = current; }
+        if (back-depth == 6) { hist6 = current; }
+        if (back-depth == 7) { hist7 = current; }
+        back-depth += 1;
+    }
+
+    function recall() -> AppPage {
+        if (back-depth > 0) {
+            back-depth -= 1;
+        }
+        if (back-depth == 0) { return hist0; }
+        if (back-depth == 1) { return hist1; }
+        if (back-depth == 2) { return hist2; }
+        if (back-depth == 3) { return hist3; }
+        if (back-depth == 4) { return hist4; }
+        if (back-depth == 5) { return hist5; }
+        if (back-depth == 6) { return hist6; }
+        return hist7;
+    }
+
+    // Remember the current page, then show `next`. Same-page calls do nothing.
+    public function open(next: AppPage) {
+        if (next == page) {
+            return;
+        }
+        day-list-open = false;
+        remember(page);
+        apply-page(next);
+    }
+
+    // Close the topmost transient layer, or restore the previous page.
+    // Returns false when nothing was open, so Android can finish the activity.
+    public function go-back() -> bool {
+        if (popup-depth > 0) {
+            close-popup-request += 1;
+            return true;
+        }
+        if (event-sheet-open) {
+            event-sheet-open = false;
+            return true;
+        }
+        if (profile-sheet-open) {
+            profile-sheet-open = false;
+            return true;
+        }
+        if (day-list-open) {
+            day-list-open = false;
+            return true;
+        }
+        if (jump-open) {
+            jump-open = false;
+            return true;
+        }
+        if (phone && sidebar-open) {
+            sidebar-open = false;
+            return true;
+        }
+        if (back-depth == 0) {
+            return false;
+        }
+        apply-page(recall());
+        return true;
+    }
+}
+
+export global Profiles {
+    in-out property <[ProfileRow]> items;
+    in-out property <string> active-id;
+    in-out property <string> sheet-title;
+    in-out property <string> sheet-name;
+    in-out property <string> sheet-path;
+    in-out property <bool> sheet-import: false;
+    in-out property <string> sheet-error;
+    callback toggle(string);
+    callback select(string);
+    callback delete(string);
+    callback open-create();
+    callback open-import();
+    callback save-sheet();
+}
+
+export global Sync {
+    in-out property <string> server-url: "http://127.0.0.1:8080";
+    in-out property <string> username;
+    in-out property <string> token;
+    in-out property <string> encrypt-key;
+    in-out property <string> status: "Chưa có token";
+    in-out property <string> error;
+    in-out property <bool> logged-in: false;
+    callback save-account();
+    callback save-encrypt-key();
+    callback sync-now();
+}
+
+export global Calendar {
+    in-out property <int> selected-index: 0;
+    in-out property <DayCellData> selected;
+    in-out property <[DayCellData]> cells;
+    in-out property <[DayCellData]> week-days;
+    in-out property <[TimedEvent]> week-events;
+    in-out property <[DayEvent]> day-events;
+    in-out property <[DayEvent]> day-popup-items;
+    in-out property <string> day-list-status;
+    in-out property <[string]> weekdays: ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+    in-out property <string> period-month-title;
+    in-out property <string> period-week-title;
+    in-out property <string> period-day-title;
+    in-out property <string> period-subtitle;
+    in-out property <string> jump-year;
+    in-out property <string> jump-month;
+    in-out property <string> jump-day;
+    in-out property <string> jump-error;
+    // Empty while creating. Set to the local integer event ID while editing.
+    in-out property <string> editing-id;
+    in-out property <string> event-title;
+    in-out property <string> event-basis: "gregorian";
+    in-out property <string> event-date;
+    in-out property <string> event-lunar-year;
+    in-out property <string> event-lunar-month;
+    in-out property <string> event-lunar-day;
+    in-out property <bool> event-lunar-leap: false;
+    in-out property <bool> event-all-day: false;
+    in-out property <string> event-start;
+    in-out property <string> event-end;
+    in-out property <bool> event-reminder-on: false;
+    in-out property <string> event-reminder;
+    in-out property <int> event-recurrence-index: 0;
+    in-out property <[string]> event-recurrence-options: ["Không lặp", "Hàng ngày", "Hàng tuần", "Hàng tháng", "Hàng năm"];
+    in-out property <string> event-error;
+    // Scope for enable / disable / delete. Day view offers this day and the series.
+    // Week and month also offer that period. Index 0 is always this day.
+    in-out property <int> event-scope-index: 0;
+    in-out property <[string]> event-scope-options: ["Ngày này", "Cả chuỗi"];
+    in-out property <bool> event-scope-has-period: false;
+    in-out property <string> event-status;
+
+    callback prev-period();
+    callback next-period();
+    callback go-today();
+    callback select-cell(int);
+    callback select-week-day(int);
+    callback jump-to();
+    callback open-event-sheet();
+    callback open-event(string);
+    callback save-event();
+    // action: 0 disable, 1 enable, 2 delete. Always the event, for the chosen scope.
+    callback apply-item-action(int);
+    // Remove the whole event. One day or one period is deleted from the editor.
+    callback delete-event(string);
+
+    public pure function weekday-name(index: int) -> string {
+        return I18n.weekdays-long[Math.mod(index, 7)];
+    }
+
+    public pure function lunar-month-name(m: int) -> string {
+        if (m < 1) {
+            return I18n.lunar-months[0];
+        }
+        if (m > 12) {
+            return I18n.lunar-months[11];
+        }
+        return I18n.lunar-months[m - 1];
+    }
+
+    public pure function greg-month-name(m: int) -> string {
+        if (m < 1) {
+            return I18n.greg-months[0];
+        }
+        if (m > 12) {
+            return I18n.greg-months[11];
+        }
+        return I18n.greg-months[m - 1];
+    }
+
+    public pure function cell-kind-bg(cell: DayCellData) -> brush {
+        if (cell.holiday) {
+            return Palette.bg-day-holiday;
+        }
+        if (cell.tiet-khi) {
+            return Palette.bg-day-tiet-khi;
+        }
+        if (cell.weekend) {
+            return Palette.bg-day-weekend;
+        }
+        return Palette.bg-day-weekday;
+    }
+}

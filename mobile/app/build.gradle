@@ -1,0 +1,51 @@
+plugins {
+    alias(libs.plugins.android.application)
+}
+
+android {
+    namespace 'dev.rurarendar.app'
+    compileSdk = 36
+    buildToolsVersion '36.1.0'
+    ndkVersion '28.2.13676358'
+
+    defaultConfig {
+        applicationId "dev.rurarendar.app"
+        // Slint's Android backend requires API 26.
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName "0.0.1"
+
+        // Packages libc++_shared.so, which the Rust cdylib links against.
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=c++_shared"
+            }
+        }
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path "CMakeLists.txt"
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    buildFeatures {
+        buildConfig true
+    }
+    packagingOptions {
+        jniLibs {
+            excludes += ['lib/*/libdummy.so']
+        }
+    }
+}

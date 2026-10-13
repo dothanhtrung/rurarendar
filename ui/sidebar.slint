@@ -1,0 +1,159 @@
+import { Palette, AppPage } from "theme-default.slint";
+import { Chrome, Profiles } from "demo-data.slint";
+import { I18n } from "i18n.slint";
+import { NavItem, ProfileNavRow } from "widgets.slint";
+
+export component Sidebar inherits Rectangle {
+    in property <bool> close-on-navigate: false;
+    background: Palette.bg-sidebar;
+    clip: true;
+    horizontal-stretch: 0;
+    width: close-on-navigate || Chrome.sidebar-open ? Palette.sidebar-width : 0;
+    animate width { duration: 180ms; }
+
+    function open-page(page: AppPage) {
+        Chrome.open(page);
+        if (root.close-on-navigate) {
+            Chrome.sidebar-open = false;
+        }
+    }
+
+    VerticalLayout {
+        padding: 16px;
+        spacing: 4px;
+
+        brand := TouchArea {
+            mouse-cursor: pointer;
+            clicked => {
+                root.open-page(Chrome.calendar-page);
+            }
+            HorizontalLayout {
+                spacing: 12px;
+                padding-bottom: 20px;
+                Image {
+                    source: @image-url("icons/logo.svg");
+                    width: 28px;
+                    height: 28px;
+                    colorize: Palette.text-on-sidebar;
+                    vertical-alignment: center;
+                }
+                VerticalLayout {
+                    alignment: center;
+                    Text {
+                        text: I18n.app-name;
+                        color: Palette.text-on-sidebar;
+                        font-family: Palette.font-display;
+                        font-size: 1.05rem;
+                        font-weight: 600;
+                    }
+                    Text {
+                        text: I18n.tagline;
+                        color: Palette.text-on-sidebar-muted;
+                        font-size: 0.75rem;
+                    }
+                }
+            }
+        }
+
+        NavItem {
+            label: I18n.nav-month;
+            icon: @image-url("icons/month.svg");
+            selected: Chrome.page == AppPage.month;
+            clicked => {
+                root.open-page(AppPage.month);
+            }
+        }
+        NavItem {
+            label: I18n.nav-week;
+            icon: @image-url("icons/week.svg");
+            selected: Chrome.page == AppPage.week;
+            clicked => {
+                root.open-page(AppPage.week);
+            }
+        }
+        NavItem {
+            label: I18n.nav-day;
+            icon: @image-url("icons/day.svg");
+            selected: Chrome.page == AppPage.day;
+            clicked => {
+                root.open-page(AppPage.day);
+            }
+        }
+
+        Text {
+            text: I18n.profiles;
+            color: Palette.text-on-sidebar-muted;
+            font-size: 0.7rem;
+            font-weight: 700;
+        }
+        Flickable {
+            height: min(list.preferred-height, 240px);
+            content-height: max(list.preferred-height, 1px);
+            content-width: self.width;
+            list := VerticalLayout {
+                width: parent.width;
+                spacing: 2px;
+                for p[idx] in Profiles.items: ProfileNavRow {
+                    data: p;
+                    can-delete: Profiles.items.length > 1;
+                    toggled => {
+                        Profiles.toggle(Profiles.items[idx].id);
+                    }
+                    selected => {
+                        Profiles.select(Profiles.items[idx].id);
+                    }
+                    deleted => {
+                        Profiles.delete(Profiles.items[idx].id);
+                    }
+                }
+            }
+        }
+        TouchArea {
+            mouse-cursor: pointer;
+            clicked => {
+                Profiles.open-create();
+            }
+            Text {
+                text: I18n.profile-new;
+                color: Palette.text-on-sidebar;
+                font-size: 0.8rem;
+                font-weight: 600;
+            }
+        }
+        TouchArea {
+            mouse-cursor: pointer;
+            clicked => {
+                Profiles.open-import();
+            }
+            Text {
+                text: I18n.profile-import;
+                color: Palette.text-on-sidebar-muted;
+                font-size: 0.8rem;
+            }
+        }
+
+        Rectangle { vertical-stretch: 1; }
+
+        Rectangle {
+            height: 1px;
+            background: Palette.sidebar-rule;
+        }
+
+        NavItem {
+            label: I18n.nav-settings;
+            icon: @image-url("icons/settings.svg");
+            selected: Chrome.page == AppPage.settings;
+            clicked => {
+                root.open-page(AppPage.settings);
+            }
+        }
+        NavItem {
+            label: I18n.nav-about;
+            icon: @image-url("icons/about.svg");
+            selected: Chrome.page == AppPage.about;
+            clicked => {
+                root.open-page(AppPage.about);
+            }
+        }
+    }
+}

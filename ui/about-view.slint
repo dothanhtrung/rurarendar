@@ -1,0 +1,42 @@
+import { Palette } from "theme-default.slint";
+import { I18n } from "i18n.slint";
+
+export component AboutView inherits Rectangle {
+    background: Palette.bg-app;
+
+    VerticalLayout {
+        alignment: center;
+        spacing: 12px;
+        width: 520px;
+        x: (parent.width - self.width) / 2;
+
+        Image {
+            source: @image-url("icons/logo.svg");
+            width: 56px;
+            height: 56px;
+            colorize: Palette.ink;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: I18n.app-name;
+            font-family: Palette.font-display;
+            font-size: 2rem;
+            font-weight: 600;
+            color: Palette.text-primary;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: I18n.about-body;
+            wrap: word-wrap;
+            color: Palette.text-secondary;
+            font-size: 0.95rem;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: I18n.about-meta;
+            color: Palette.text-muted;
+            font-size: 0.8rem;
+            horizontal-alignment: center;
+        }
+    }
+}

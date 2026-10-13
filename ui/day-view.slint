@@ -1,0 +1,229 @@
+import { Palette } from "theme-default.slint";
+import { Calendar, Chrome } from "demo-data.slint";
+import { I18n } from "i18n.slint";
+import { EventRow, InkButton, PeriodGesture } from "widgets.slint";
+
+component CanChiLine inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> value;
+    spacing: 8px;
+    Text {
+        text: label;
+        color: Palette.text-muted;
+        font-size: 0.8rem;
+        width: 52px;
+        vertical-alignment: center;
+    }
+    Text {
+        text: value;
+        color: Palette.text-primary;
+        font-size: 1rem;
+        font-weight: 600;
+        vertical-alignment: center;
+    }
+}
+
+component AlmanacCard inherits Rectangle {
+    in property <bool> compact: false;
+    border-radius: 16px;
+    background: Calendar.cell-kind-bg(Calendar.selected);
+    drop-shadow-blur: compact ? 12px : 24px;
+    drop-shadow-color: Palette.shadow;
+    drop-shadow-offset-y: compact ? 4px : 8px;
+    vertical-stretch: compact ? 0 : 1;
+    horizontal-stretch: 1;
+
+    VerticalLayout {
+        padding: compact ? 16px : 40px;
+        spacing: compact ? 4px : 8px;
+
+        Text {
+            text: "\{Calendar.greg-month-name(Calendar.selected.month)}  \{Calendar.selected.year}";
+            font-family: Palette.font-ui;
+            font-size: compact ? 0.85rem : 1rem;
+            font-weight: 700;
+            color: Palette.text-secondary;
+        }
+        Text {
+            text: Calendar.selected.weekday-name;
+            color: Palette.text-muted;
+            font-size: compact ? 0.85rem : 0.95rem;
+        }
+
+        Rectangle { vertical-stretch: 1; }
+
+        Text {
+            text: Calendar.selected.gregorian;
+            font-family: Palette.font-display;
+            font-size: compact ? 4.2rem : 8rem;
+            font-weight: 600;
+            color: Calendar.selected.holiday ? Palette.text-holiday : Palette.text-primary;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: Calendar.selected.has-event ? Calendar.selected.title : "Đi một ngày đàng, học một sàng khôn.";
+            color: Palette.text-secondary;
+            font-size: compact ? 0.95rem : 1.1rem;
+            horizontal-alignment: center;
+            font-italic: !Calendar.selected.has-event;
+            wrap: word-wrap;
+        }
+
+        Rectangle { vertical-stretch: compact ? 0.2 : 0.4; }
+
+        Rectangle {
+            height: 1px;
+            background: Palette.rule;
+        }
+
+        HorizontalLayout {
+            padding-top: compact ? 12px : 24px;
+            spacing: compact ? 8px : 16px;
+
+            VerticalLayout {
+                spacing: compact ? 6px : 10px;
+                CanChiLine { label: I18n.year; value: Calendar.selected.year-can-chi; }
+                CanChiLine { label: I18n.month; value: Calendar.selected.month-can-chi; }
+                CanChiLine { label: I18n.day; value: Calendar.selected.day-can-chi; }
+                CanChiLine { label: I18n.hour; value: Calendar.selected.hour-can-chi; }
+            }
+
+            Rectangle {
+                width: 1px;
+                background: Palette.rule;
+            }
+
+            VerticalLayout {
+                alignment: center;
+                Text {
+                    text: Calendar.selected.lunar-month-name;
+                    color: Palette.lunar-day;
+                    font-size: compact ? 0.8rem : 0.95rem;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    text: Calendar.selected.lunar-day == 0 ? "" : Calendar.selected.lunar-day;
+                    font-family: Palette.font-display;
+                    font-size: compact ? 2.4rem : 4.2rem;
+                    font-weight: 600;
+                    color: Palette.text-primary;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    text: Calendar.selected.year-can-chi == "" ? "" : "\{I18n.year-word} \{Calendar.selected.year-can-chi}";
+                    color: Palette.text-muted;
+                    font-size: 0.85rem;
+                    horizontal-alignment: center;
+                }
+            }
+
+            Rectangle {
+                width: 1px;
+                background: Palette.rule;
+            }
+
+            VerticalLayout {
+                alignment: center;
+                Text {
+                    text: I18n.solar-term;
+                    color: Palette.text-muted;
+                    font-size: 0.8rem;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    text: Calendar.selected.tiet-khi ? Calendar.selected.tiet-khi-name : "";
+                    font-family: Palette.font-display;
+                    font-size: compact ? 1.1rem : 1.4rem;
+                    font-weight: 600;
+                    color: Palette.mark-tiet-khi;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    text: Calendar.selected.tiet-khi ? Calendar.selected.tiet-khi-time : "";
+                    color: Palette.text-muted;
+                    font-size: 0.85rem;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+    }
+}
+
+component DayEventsCard inherits Rectangle {
+    in property <bool> compact: false;
+    border-radius: 16px;
+    background: Palette.bg-panel;
+    horizontal-stretch: compact ? 1 : 0;
+    vertical-stretch: compact ? 0 : 1;
+    min-width: compact ? 0px : Palette.peek-width;
+    preferred-width: compact ? 0px : Palette.peek-width;
+    max-width: compact ? 10000px : Palette.peek-width;
+
+    VerticalLayout {
+        padding: compact ? 16px : 24px;
+        spacing: 8px;
+        Text {
+            text: I18n.during-day;
+            font-family: Palette.font-display;
+            font-size: compact ? 1rem : 1.1rem;
+            font-weight: 600;
+            color: Palette.text-primary;
+        }
+        for ev[idx] in Calendar.day-events: EventRow {
+            time: ev.time;
+            title: ev.title;
+            enabled: ev.enabled;
+            can-delete: ev.id != "";
+            delete-label: I18n.row-delete;
+            clicked => {
+                if (Calendar.day-events[idx].id != "") {
+                    Calendar.open-event(Calendar.day-events[idx].id);
+                }
+            }
+            delete => {
+                Calendar.delete-event(Calendar.day-events[idx].id);
+            }
+        }
+        if (Calendar.day-events.length == 0): Text {
+            text: I18n.empty-day;
+            color: Palette.text-muted;
+            wrap: word-wrap;
+        }
+        if (!compact): Rectangle { vertical-stretch: 1; }
+        InkButton {
+            label: I18n.add-event;
+            clicked => {
+                Calendar.open-event-sheet();
+            }
+        }
+    }
+}
+
+export component DayView inherits Rectangle {
+    background: Palette.bg-app;
+
+    if (Chrome.phone): Flickable {
+        content-width: self.width;
+        content-height: phone-col.preferred-height;
+        phone-col := VerticalLayout {
+            width: 100%;
+            padding: 12px;
+            spacing: 12px;
+            AlmanacCard {
+                compact: true;
+            }
+            DayEventsCard {
+                compact: true;
+            }
+        }
+    }
+    if (!Chrome.phone): PeriodGesture {
+        HorizontalLayout {
+            padding: 24px;
+            spacing: 24px;
+            AlmanacCard { }
+            DayEventsCard { }
+        }
+    }
+}

@@ -1,0 +1,417 @@
+// Color schemes. Tokens stay stable; E-ink, Gruvbox, and Modern each supply light and dark.
+// Theme.scheme-index: 0 E-ink, 1 Gruvbox, 2 Modern.
+// Theme.mode-index: 0 auto (system), 1 light, 2 dark. Unknown system scheme counts as light.
+
+import { Palette as WidgetPalette } from "std-widgets.slint";
+
+export enum AppPage { day, week, month, settings, about }
+
+export struct DayCellData {
+    gregorian: int,
+    month: int,
+    year: int,
+    lunar: string,
+    lunar-day: int,
+    lunar-month: int,
+    lunar-leap: bool,
+    lunar-month-name: string,
+    year-can-chi: string,
+    month-can-chi: string,
+    day-can-chi: string,
+    hour-can-chi: string,
+    weekday-name: string,
+    in-month: bool,
+    today: bool,
+    weekend: bool,
+    holiday: bool,
+    tiet-khi: bool,
+    tiet-khi-name: string,
+    tiet-khi-time: string,
+    has-event: bool,
+    title: string,
+}
+
+export struct TimedEvent {
+    day: int,
+    start-hour: float,
+    hours: float,
+    title: string,
+    holiday: bool,
+    // Empty for blocks that are not a stored user event.
+    id: string,
+    enabled: bool,
+}
+
+export struct DayEvent {
+    time: string,
+    title: string,
+    // Empty for holidays and other rows that cannot be edited.
+    id: string,
+    enabled: bool,
+}
+
+export struct ProfileRow {
+    id: string,
+    name: string,
+    enabled: bool,
+    active: bool,
+}
+
+struct Swatch {
+    bg-app: brush,
+    bg-surface: brush,
+    bg-sidebar: brush,
+    bg-sidebar-hover: brush,
+    bg-sidebar-active: brush,
+    bg-header: brush,
+    bg-panel: brush,
+    bg-cell: brush,
+    bg-hover: brush,
+    bg-day-weekday: brush,
+    bg-day-weekend: brush,
+    bg-day-holiday: brush,
+    bg-day-tiet-khi: brush,
+    text-primary: brush,
+    text-secondary: brush,
+    text-muted: brush,
+    lunar-day: brush,
+    text-on-sidebar: brush,
+    text-on-sidebar-muted: brush,
+    text-on-accent: brush,
+    text-on-ink: brush,
+    text-on-event: brush,
+    text-holiday: brush,
+    mark-holiday: brush,
+    mark-festival: brush,
+    mark-tiet-khi: brush,
+    mark-event: brush,
+    mark-today: brush,
+    accent: brush,
+    ink: brush,
+    rule: brush,
+    border: brush,
+    selected-ring: brush,
+    overlay: brush,
+    event-block: brush,
+    shadow: brush,
+    sidebar-rule: brush,
+}
+
+export global Theme {
+    in-out property <int> scheme-index: 2;
+    in-out property <int> mode-index: 0;
+    // WidgetPalette reports the platform scheme (dark, light, or unknown).
+    private property <bool> system-dark: WidgetPalette.color-scheme == ColorScheme.dark;
+    // Resolved appearance. Auto follows the platform; ColorScheme.unknown stays light.
+    out property <bool> dark: mode-index == 2 || (mode-index != 1 && system-dark);
+    callback scheme-changed(int);
+    callback mode-changed(int);
+
+    // Header sun/moon: leave Auto and pin the opposite of what is on screen.
+    public function toggle-explicit() {
+        if (dark) {
+            mode-index = 1;
+        } else {
+            mode-index = 2;
+        }
+        mode-changed(mode-index);
+    }
+}
+
+export global Palette {
+    private property <Swatch> eink-light: {
+        bg-app: #EFE6D6,
+        bg-surface: #F7F1E6,
+        bg-sidebar: #241C16,
+        bg-sidebar-hover: #322820,
+        bg-sidebar-active: #3A2E24,
+        bg-header: #F7F1E6,
+        bg-panel: #F7F1E6,
+        bg-cell: #FBF6EC,
+        bg-hover: #E8DFD0,
+        bg-day-weekday: #F4EBDA,
+        bg-day-weekend: #EBD7C4,
+        bg-day-holiday: #F3D4C8,
+        bg-day-tiet-khi: #EFE4C4,
+        text-primary: #1C1612,
+        text-secondary: #5C4E42,
+        text-muted: #8A7B6B,
+        lunar-day: #8B5E3C,
+        text-on-sidebar: #F3E6D4,
+        text-on-sidebar-muted: #C4B19A,
+        text-on-accent: #FBF6EC,
+        text-on-ink: #FBF6EC,
+        text-on-event: #FBF6EC,
+        text-holiday: #B33322,
+        mark-holiday: #C43C2C,
+        mark-festival: #C4782C,
+        mark-tiet-khi: #B0892C,
+        mark-event: #2F5D62,
+        mark-today: #C43C2C,
+        accent: #C43C2C,
+        ink: #241C16,
+        rule: #D9CBB6,
+        border: #E0D2BC,
+        selected-ring: #C43C2C,
+        overlay: #1C161280,
+        event-block: #2F5D62,
+        shadow: #1C161230,
+        sidebar-rule: #FFFFFF18,
+    };
+    private property <Swatch> eink-dark: {
+        bg-app: #1C1814,
+        bg-surface: #26211C,
+        bg-sidebar: #120F0C,
+        bg-sidebar-hover: #2A241E,
+        bg-sidebar-active: #3A3128,
+        bg-header: #221E19,
+        bg-panel: #26211C,
+        bg-cell: #2C261F,
+        bg-hover: #3A322A,
+        bg-day-weekday: #2A241C,
+        bg-day-weekend: #3A2E26,
+        bg-day-holiday: #4A2E28,
+        bg-day-tiet-khi: #3A3420,
+        text-primary: #F3E6D4,
+        text-secondary: #C4B19A,
+        text-muted: #8A7B6B,
+        lunar-day: #E0B080,
+        text-on-sidebar: #F3E6D4,
+        text-on-sidebar-muted: #A89884,
+        text-on-accent: #FBF6EC,
+        text-on-ink: #1C1612,
+        text-on-event: #FBF6EC,
+        text-holiday: #F0A090,
+        mark-holiday: #E25A48,
+        mark-festival: #E09A4A,
+        mark-tiet-khi: #D4B45A,
+        mark-event: #7EAEA8,
+        mark-today: #E25A48,
+        accent: #E25A48,
+        ink: #F3E6D4,
+        rule: #3A322A,
+        border: #4A4036,
+        selected-ring: #E25A48,
+        overlay: #100E0C99,
+        event-block: #2F5D62,
+        shadow: #00000066,
+        sidebar-rule: #FFFFFF18,
+    };
+    private property <Swatch> gruvbox-light: {
+        bg-app: #FBF1C7,
+        bg-surface: #F9F5D7,
+        bg-sidebar: #3C3836,
+        bg-sidebar-hover: #504945,
+        bg-sidebar-active: #665C54,
+        bg-header: #F2E5BC,
+        bg-panel: #F9F5D7,
+        bg-cell: #FBF1C7,
+        bg-hover: #EBDBB2,
+        bg-day-weekday: #F2E5BC,
+        bg-day-weekend: #EBDBB2,
+        bg-day-holiday: #F2D5C8,
+        bg-day-tiet-khi: #F0E4B0,
+        text-primary: #3C3836,
+        text-secondary: #504945,
+        text-muted: #7C6F64,
+        lunar-day: #AF3A03,
+        text-on-sidebar: #FBF1C7,
+        text-on-sidebar-muted: #BDAE93,
+        text-on-accent: #FBF1C7,
+        text-on-ink: #FBF1C7,
+        text-on-event: #FBF1C7,
+        text-holiday: #9D0006,
+        mark-holiday: #CC241D,
+        mark-festival: #D65D0E,
+        mark-tiet-khi: #D79921,
+        mark-event: #458588,
+        mark-today: #CC241D,
+        accent: #AF3A03,
+        ink: #3C3836,
+        rule: #D5C4A1,
+        border: #D5C4A1,
+        selected-ring: #AF3A03,
+        overlay: #3C383680,
+        event-block: #076678,
+        shadow: #3C383630,
+        sidebar-rule: #FBF1C722,
+    };
+    private property <Swatch> gruvbox-dark: {
+        bg-app: #282828,
+        bg-surface: #32302F,
+        bg-sidebar: #1D2021,
+        bg-sidebar-hover: #3C3836,
+        bg-sidebar-active: #504945,
+        bg-header: #1D2021,
+        bg-panel: #32302F,
+        bg-cell: #3C3836,
+        bg-hover: #504945,
+        bg-day-weekday: #32302F,
+        bg-day-weekend: #3C3836,
+        bg-day-holiday: #4A3028,
+        bg-day-tiet-khi: #3E3820,
+        text-primary: #EBDBB2,
+        text-secondary: #D5C4A1,
+        text-muted: #A89984,
+        lunar-day: #FE8019,
+        text-on-sidebar: #EBDBB2,
+        text-on-sidebar-muted: #A89984,
+        text-on-accent: #282828,
+        text-on-ink: #282828,
+        text-on-event: #FBF1C7,
+        text-holiday: #FB4934,
+        mark-holiday: #FB4934,
+        mark-festival: #FE8019,
+        mark-tiet-khi: #FABD2F,
+        mark-event: #83A598,
+        mark-today: #FB4934,
+        accent: #FE8019,
+        ink: #EBDBB2,
+        rule: #504945,
+        border: #665C54,
+        selected-ring: #FE8019,
+        overlay: #1D2021AA,
+        event-block: #076678,
+        shadow: #00000066,
+        sidebar-rule: #EBDBB222,
+    };
+    private property <Swatch> modern-light: {
+        bg-app: #F4F5F7,
+        bg-surface: #FFFFFF,
+        bg-sidebar: #1B2130,
+        bg-sidebar-hover: #283044,
+        bg-sidebar-active: #34405A,
+        bg-header: #FFFFFF,
+        bg-panel: #FFFFFF,
+        bg-cell: #FFFFFF,
+        bg-hover: #EEF0F4,
+        bg-day-weekday: #F7F8FA,
+        bg-day-weekend: #EEF1F8,
+        bg-day-holiday: #FDECEC,
+        bg-day-tiet-khi: #F8F3E4,
+        text-primary: #1A1D26,
+        text-secondary: #4A5160,
+        text-muted: #8B93A3,
+        lunar-day: #5B4B8A,
+        text-on-sidebar: #F4F5F7,
+        text-on-sidebar-muted: #A8B0C0,
+        text-on-accent: #FFFFFF,
+        text-on-ink: #FFFFFF,
+        text-on-event: #FFFFFF,
+        text-holiday: #C43838,
+        mark-holiday: #E24B4B,
+        mark-festival: #E08A2C,
+        mark-tiet-khi: #C4A035,
+        mark-event: #3D6BFF,
+        mark-today: #3D6BFF,
+        accent: #3D6BFF,
+        ink: #1A1D26,
+        rule: #E4E7EE,
+        border: #E4E7EE,
+        selected-ring: #3D6BFF,
+        overlay: #1A1D2680,
+        event-block: #2F54D0,
+        shadow: #1A1D2624,
+        sidebar-rule: #FFFFFF18,
+    };
+    private property <Swatch> modern-dark: {
+        bg-app: #12141A,
+        bg-surface: #1A1D26,
+        bg-sidebar: #0C0E14,
+        bg-sidebar-hover: #222836,
+        bg-sidebar-active: #2E3648,
+        bg-header: #1A1D26,
+        bg-panel: #1A1D26,
+        bg-cell: #222633,
+        bg-hover: #2C3244,
+        bg-day-weekday: #1C202A,
+        bg-day-weekend: #242A38,
+        bg-day-holiday: #3A2428,
+        bg-day-tiet-khi: #332E20,
+        text-primary: #F2F4F8,
+        text-secondary: #C2C8D4,
+        text-muted: #8B93A3,
+        lunar-day: #C4B4F0,
+        text-on-sidebar: #F2F4F8,
+        text-on-sidebar-muted: #8B93A3,
+        text-on-accent: #12141A,
+        text-on-ink: #12141A,
+        text-on-event: #FFFFFF,
+        text-holiday: #FF8D8D,
+        mark-holiday: #FF6B6B,
+        mark-festival: #F0A04A,
+        mark-tiet-khi: #E0C15A,
+        mark-event: #8AABFF,
+        mark-today: #8AABFF,
+        accent: #8AABFF,
+        ink: #F2F4F8,
+        rule: #2C3244,
+        border: #3A4254,
+        selected-ring: #8AABFF,
+        overlay: #0C0E14B3,
+        event-block: #2A4A9E,
+        shadow: #00000080,
+        sidebar-rule: #FFFFFF18,
+    };
+    private property <Swatch> active: {
+        if (Theme.scheme-index == 1) {
+            return Theme.dark ? gruvbox-dark : gruvbox-light;
+        }
+        if (Theme.scheme-index == 2) {
+            return Theme.dark ? modern-dark : modern-light;
+        }
+        return Theme.dark ? eink-dark : eink-light;
+    };
+
+    out property <brush> bg-app: active.bg-app;
+    out property <brush> bg-surface: active.bg-surface;
+    out property <brush> bg-sidebar: active.bg-sidebar;
+    out property <brush> bg-sidebar-hover: active.bg-sidebar-hover;
+    out property <brush> bg-sidebar-active: active.bg-sidebar-active;
+    out property <brush> bg-header: active.bg-header;
+    out property <brush> bg-panel: active.bg-panel;
+    out property <brush> bg-cell: active.bg-cell;
+    out property <brush> bg-hover: active.bg-hover;
+    out property <brush> bg-day-weekday: active.bg-day-weekday;
+    out property <brush> bg-day-weekend: active.bg-day-weekend;
+    out property <brush> bg-day-holiday: active.bg-day-holiday;
+    out property <brush> bg-day-tiet-khi: active.bg-day-tiet-khi;
+    out property <brush> text-primary: active.text-primary;
+    out property <brush> text-secondary: active.text-secondary;
+    out property <brush> text-muted: active.text-muted;
+    out property <brush> lunar-day: active.lunar-day;
+    out property <brush> text-on-sidebar: active.text-on-sidebar;
+    out property <brush> text-on-sidebar-muted: active.text-on-sidebar-muted;
+    out property <brush> text-on-accent: active.text-on-accent;
+    out property <brush> text-on-ink: active.text-on-ink;
+    out property <brush> text-on-event: active.text-on-event;
+    out property <brush> text-holiday: active.text-holiday;
+    out property <brush> mark-holiday: active.mark-holiday;
+    out property <brush> mark-festival: active.mark-festival;
+    out property <brush> mark-tiet-khi: active.mark-tiet-khi;
+    out property <brush> mark-event: active.mark-event;
+    out property <brush> mark-today: active.mark-today;
+    out property <brush> accent: active.accent;
+    out property <brush> ink: active.ink;
+    out property <brush> rule: active.rule;
+    out property <brush> border: active.border;
+    out property <brush> selected-ring: active.selected-ring;
+    out property <brush> overlay: active.overlay;
+    out property <brush> event-block: active.event-block;
+    out property <brush> shadow: active.shadow;
+    out property <brush> sidebar-rule: active.sidebar-rule;
+
+    out property <length> sidebar-width: 232px;
+    out property <length> header-height: 64px;
+    out property <length> peek-width: 344px;
+    out property <length> space-1: 4px;
+    out property <length> space-2: 8px;
+    out property <length> space-3: 12px;
+    out property <length> space-4: 16px;
+    out property <length> space-5: 24px;
+    out property <length> radius: 10px;
+    out property <length> radius-sm: 6px;
+
+    out property <string> font-ui: "Noto Sans";
+    out property <string> font-display: Theme.scheme-index == 2 ? "Noto Sans" : "Noto Serif";
+}

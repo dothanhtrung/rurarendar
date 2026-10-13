@@ -1,0 +1,456 @@
+import { Palette } from "theme-default.slint";
+import { Chrome, Calendar, Profiles } from "demo-data.slint";
+import { I18n } from "i18n.slint";
+import { Field, InkButton, IconButton, CheckRow, SelectField, EventRow } from "widgets.slint";
+
+component JumpTab inherits Rectangle {
+    in property <string> label;
+    in property <bool> active;
+    border-radius: 16px;
+    background: active ? Palette.ink : Palette.bg-hover;
+    height: 32px;
+    horizontal-stretch: 1;
+    Text {
+        text: label;
+        color: active ? Palette.text-on-ink : Palette.text-secondary;
+        font-weight: 600;
+        font-size: 0.85rem;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+export component JumpPopup inherits Rectangle {
+    background: Palette.overlay;
+    ta := TouchArea {
+        clicked => {
+            Chrome.jump-open = false;
+        }
+    }
+
+    Rectangle {
+        width: 420px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        height: box.preferred-height;
+        border-radius: 12px;
+        background: Palette.bg-surface;
+        drop-shadow-blur: 32px;
+        drop-shadow-color: Palette.shadow;
+
+        TouchArea { }
+
+        box := VerticalLayout {
+            padding: 24px;
+            spacing: 16px;
+
+            HorizontalLayout {
+                Text {
+                    text: I18n.jump-title;
+                    font-family: Palette.font-display;
+                    font-size: 1.2rem;
+                    font-weight: 600;
+                    color: Palette.text-primary;
+                }
+                Rectangle { horizontal-stretch: 1; }
+                IconButton {
+                    icon: @image-url("icons/close.svg");
+                    clicked => {
+                        Chrome.jump-open = false;
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 8px;
+                JumpTab { label: I18n.gregorian; active: true; }
+                JumpTab { label: I18n.lunar; active: false; }
+            }
+
+            HorizontalLayout {
+                spacing: 12px;
+                Field { label: I18n.year; text <=> Calendar.jump-year; horizontal-stretch: 1; }
+                Field { label: I18n.month; text <=> Calendar.jump-month; horizontal-stretch: 1; }
+                Field { label: I18n.day; text <=> Calendar.jump-day; horizontal-stretch: 1; }
+            }
+
+            Text {
+                text: Calendar.jump-error == "" ? I18n.out-of-range : Calendar.jump-error;
+                color: Calendar.jump-error == "" ? Palette.text-muted : Palette.text-holiday;
+                font-size: 0.8rem;
+            }
+
+            HorizontalLayout {
+                alignment: end;
+                spacing: 8px;
+                InkButton {
+                    label: I18n.cancel;
+                    quiet: true;
+                    clicked => {
+                        Chrome.jump-open = false;
+                    }
+                }
+                InkButton {
+                    label: I18n.go-to-date;
+                    clicked => {
+                        Calendar.jump-to();
+                    }
+                }
+            }
+        }
+    }
+}
+
+component SheetTab inherits Rectangle {
+    in property <string> label;
+    in property <bool> active;
+    callback clicked();
+    border-radius: 16px;
+    background: active ? Palette.ink : Palette.bg-hover;
+    height: 32px;
+    horizontal-stretch: 1;
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+        Text {
+            text: label;
+            color: active ? Palette.text-on-ink : Palette.text-secondary;
+            font-weight: 600;
+            font-size: 0.85rem;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component DayListPopup inherits Rectangle {
+    background: Palette.overlay;
+    ta := TouchArea {
+        clicked => {
+            Chrome.day-list-open = false;
+        }
+    }
+
+    Rectangle {
+        width: min(440px, parent.width - 32px);
+        x: (parent.width - self.width) / 2;
+        y: max((parent.height - self.height) / 2, 24px);
+        height: min(box.preferred-height, parent.height - 48px);
+        border-radius: 12px;
+        background: Palette.bg-surface;
+        drop-shadow-blur: 32px;
+        drop-shadow-color: Palette.shadow;
+
+        TouchArea { }
+
+        box := VerticalLayout {
+            padding: 24px;
+            spacing: 12px;
+
+            HorizontalLayout {
+                VerticalLayout {
+                    spacing: 2px;
+                    horizontal-stretch: 1;
+                    Text {
+                        text: Calendar.period-day-title;
+                        font-family: Palette.font-display;
+                        font-size: 1.15rem;
+                        font-weight: 600;
+                        color: Palette.text-primary;
+                        wrap: word-wrap;
+                    }
+                    if (Calendar.period-subtitle != ""): Text {
+                        text: Calendar.period-subtitle;
+                        color: Palette.lunar-day;
+                        font-size: 0.85rem;
+                        wrap: word-wrap;
+                    }
+                }
+                IconButton {
+                    icon: @image-url("icons/close.svg");
+                    clicked => {
+                        Chrome.day-list-open = false;
+                    }
+                }
+            }
+
+            if (Calendar.day-popup-items.length == 0): Text {
+                text: I18n.day-popup-empty;
+                color: Palette.text-muted;
+                font-size: 0.9rem;
+                wrap: word-wrap;
+            }
+            if (Calendar.day-popup-items.length > 0): Flickable {
+                horizontal-stretch: 1;
+                height: min(list.preferred-height, 360px);
+                content-height: max(list.preferred-height, 1px);
+                content-width: self.width;
+                list := VerticalLayout {
+                    width: parent.width;
+                    spacing: 2px;
+                    for item[idx] in Calendar.day-popup-items: EventRow {
+                        time: item.time;
+                        title: item.title;
+                        enabled: item.enabled;
+                        can-delete: item.id != "";
+                        delete-label: I18n.row-delete;
+                        clicked => {
+                            if (Calendar.day-popup-items[idx].id != "") {
+                                Calendar.open-event(Calendar.day-popup-items[idx].id);
+                            }
+                        }
+                        delete => {
+                            Calendar.delete-event(Calendar.day-popup-items[idx].id);
+                        }
+                    }
+                }
+            }
+            if (Calendar.day-list-status != ""): Text {
+                text: Calendar.day-list-status;
+                color: Palette.text-holiday;
+                font-size: 0.85rem;
+                wrap: word-wrap;
+            }
+            InkButton {
+                label: I18n.add-event;
+                clicked => {
+                    Calendar.open-event-sheet();
+                }
+            }
+        }
+    }
+}
+
+export component EventSheet inherits Rectangle {
+    background: Palette.overlay;
+    ta := TouchArea {
+        clicked => {
+            Chrome.event-sheet-open = false;
+        }
+    }
+
+    Rectangle {
+        width: 480px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        height: min(box.preferred-height, max(parent.height - 32px, 200px));
+        border-radius: 12px;
+        background: Palette.bg-surface;
+        drop-shadow-blur: 32px;
+        drop-shadow-color: Palette.shadow;
+        TouchArea { }
+        Flickable {
+            width: parent.width;
+            height: parent.height;
+            content-width: self.width;
+            content-height: max(box.preferred-height, 1px);
+        box := VerticalLayout {
+            width: parent.width;
+            padding: 24px;
+            spacing: 12px;
+            HorizontalLayout {
+                Text {
+                    text: Calendar.editing-id == "" ? I18n.new-event : I18n.edit-event;
+                    font-family: Palette.font-display;
+                    font-size: 1.2rem;
+                    font-weight: 600;
+                    color: Palette.text-primary;
+                }
+                Rectangle { horizontal-stretch: 1; }
+                IconButton {
+                    icon: @image-url("icons/close.svg");
+                    clicked => {
+                        Chrome.event-sheet-open = false;
+                    }
+                }
+            }
+            Field { label: I18n.title-label; placeholder: I18n.title-placeholder; text <=> Calendar.event-title; }
+            HorizontalLayout {
+                spacing: 8px;
+                SheetTab {
+                    label: I18n.gregorian;
+                    active: Calendar.event-basis == "gregorian";
+                    clicked => {
+                        Calendar.event-basis = "gregorian";
+                    }
+                }
+                SheetTab {
+                    label: I18n.lunar;
+                    active: Calendar.event-basis == "lunar";
+                    clicked => {
+                        Calendar.event-basis = "lunar";
+                    }
+                }
+            }
+            if (Calendar.event-basis == "gregorian"): Field {
+                label: I18n.gregorian-date;
+                text <=> Calendar.event-date;
+            }
+            if (Calendar.event-basis == "lunar"): VerticalLayout {
+                spacing: 8px;
+                HorizontalLayout {
+                    spacing: 8px;
+                    Field { label: I18n.lunar-year; text <=> Calendar.event-lunar-year; horizontal-stretch: 1; }
+                    Field { label: I18n.lunar-month; text <=> Calendar.event-lunar-month; horizontal-stretch: 1; }
+                    Field { label: I18n.lunar-day; text <=> Calendar.event-lunar-day; horizontal-stretch: 1; }
+                }
+                CheckRow { label: I18n.leap-month; checked <=> Calendar.event-lunar-leap; }
+            }
+            CheckRow { label: I18n.all-day; checked <=> Calendar.event-all-day; }
+            if (!Calendar.event-all-day): HorizontalLayout {
+                spacing: 12px;
+                Field { label: I18n.start; text <=> Calendar.event-start; horizontal-stretch: 1; }
+                Field { label: I18n.end; text <=> Calendar.event-end; horizontal-stretch: 1; }
+            }
+            CheckRow { label: I18n.reminder; checked <=> Calendar.event-reminder-on; }
+            Text {
+                text: I18n.reminder-hint;
+                color: Palette.text-muted;
+                font-size: 0.8rem;
+                wrap: word-wrap;
+            }
+            if (Calendar.event-reminder-on): Field {
+                label: I18n.remind-at;
+                text <=> Calendar.event-reminder;
+            }
+            SelectField {
+                label: I18n.repeat;
+                options: Calendar.event-recurrence-options;
+                index <=> Calendar.event-recurrence-index;
+            }
+            if (Calendar.editing-id != ""): VerticalLayout {
+                spacing: 8px;
+                SelectField {
+                    label: I18n.apply-to;
+                    options: Calendar.event-scope-options;
+                    index <=> Calendar.event-scope-index;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    InkButton {
+                        label: I18n.disable-event;
+                        quiet: true;
+                        clicked => {
+                            Calendar.apply-item-action(0);
+                        }
+                    }
+                    InkButton {
+                        label: I18n.enable-event;
+                        quiet: true;
+                        clicked => {
+                            Calendar.apply-item-action(1);
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    InkButton {
+                        label: I18n.delete-event;
+                        quiet: true;
+                        clicked => {
+                            Calendar.apply-item-action(2);
+                        }
+                    }
+                }
+            }
+            if (Calendar.event-status != ""): Text {
+                text: Calendar.event-status;
+                color: Palette.text-secondary;
+                font-size: 0.85rem;
+                wrap: word-wrap;
+            }
+            if (Calendar.event-error != ""): Text {
+                text: Calendar.event-error;
+                color: Palette.text-holiday;
+                font-size: 0.85rem;
+                wrap: word-wrap;
+            }
+            HorizontalLayout {
+                alignment: end;
+                spacing: 8px;
+                padding-top: 8px;
+                InkButton {
+                    label: I18n.cancel;
+                    quiet: true;
+                    clicked => {
+                        Chrome.event-sheet-open = false;
+                    }
+                }
+                InkButton {
+                    label: I18n.save;
+                    clicked => {
+                        Calendar.save-event();
+                    }
+                }
+            }
+        }
+        }
+    }
+}
+
+export component ProfileSheet inherits Rectangle {
+    background: Palette.overlay;
+    TouchArea {
+        clicked => {
+            Chrome.profile-sheet-open = false;
+        }
+    }
+    Rectangle {
+        width: 420px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        height: box.preferred-height;
+        border-radius: 12px;
+        background: Palette.bg-surface;
+        drop-shadow-blur: 32px;
+        drop-shadow-color: Palette.shadow;
+        TouchArea { }
+        box := VerticalLayout {
+            padding: 24px;
+            spacing: 12px;
+            Text {
+                text: Profiles.sheet-title;
+                font-family: Palette.font-display;
+                font-size: 1.2rem;
+                font-weight: 600;
+                color: Palette.text-primary;
+            }
+            Field { label: I18n.profile-name; text <=> Profiles.sheet-name; }
+            if (Profiles.sheet-import): Field {
+                label: I18n.profile-path;
+                text <=> Profiles.sheet-path;
+            }
+            Text {
+                text: I18n.profile-path-hint;
+                color: Palette.text-muted;
+                font-size: 0.8rem;
+                wrap: word-wrap;
+            }
+            if (Profiles.sheet-error != ""): Text {
+                text: Profiles.sheet-error;
+                color: Palette.text-holiday;
+                font-size: 0.85rem;
+                wrap: word-wrap;
+            }
+            HorizontalLayout {
+                alignment: end;
+                spacing: 8px;
+                InkButton {
+                    label: I18n.cancel;
+                    quiet: true;
+                    clicked => {
+                        Chrome.profile-sheet-open = false;
+                    }
+                }
+                InkButton {
+                    label: I18n.save;
+                    clicked => {
+                        Profiles.save-sheet();
+                    }
+                }
+            }
+        }
+    }
+}

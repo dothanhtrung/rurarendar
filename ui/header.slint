@@ -1,0 +1,154 @@
+import { Palette, AppPage, Theme } from "theme-default.slint";
+import { Chrome, Calendar } from "demo-data.slint";
+import { I18n } from "i18n.slint";
+import { IconButton, InkButton } from "widgets.slint";
+
+export component Header inherits Rectangle {
+    height: Palette.header-height;
+    background: Palette.bg-header;
+
+    HorizontalLayout {
+        padding-left: Chrome.phone ? 8px : 16px;
+        padding-right: Chrome.phone ? 8px : 16px;
+        spacing: Chrome.phone ? 4px : 12px;
+
+        if (Chrome.can-go-back): IconButton {
+            size: Chrome.phone ? 32px : 36px;
+            icon: @image-url("icons/chevron-left.svg");
+            tip: Chrome.phone ? "" : I18n.back;
+            clicked => {
+                Chrome.go-back();
+            }
+        }
+
+        IconButton {
+            size: Chrome.phone ? 32px : 36px;
+            icon: @image-url("icons/menu.svg");
+            // Tooltips steal the first tap on Android.
+            tip: Chrome.phone ? "" : (Chrome.sidebar-open ? I18n.hide-sidebar : I18n.show-sidebar);
+            clicked => {
+                Chrome.sidebar-open = !Chrome.sidebar-open;
+            }
+        }
+
+        if (!Chrome.phone): Rectangle { horizontal-stretch: 1; }
+
+        if (Chrome.page == AppPage.day || Chrome.page == AppPage.week || Chrome.page == AppPage.month): HorizontalLayout {
+            spacing: Chrome.phone ? 4px : 8px;
+            horizontal-stretch: Chrome.phone ? 1 : 0;
+            alignment: center;
+
+            IconButton {
+                size: Chrome.phone ? 32px : 36px;
+                icon: @image-url("icons/chevron-left.svg");
+                tip: Chrome.phone ? "" : I18n.prev;
+                clicked => {
+                    Calendar.prev-period();
+                }
+            }
+
+            period-touch := TouchArea {
+                min-width: 0px;
+                preferred-width: Chrome.phone ? 120px : period-title.preferred-width;
+                horizontal-stretch: Chrome.phone ? 1 : 0;
+                mouse-cursor: pointer;
+                clicked => {
+                    Chrome.jump-open = true;
+                }
+                VerticalLayout {
+                    alignment: center;
+                    period-title := Text {
+                        min-width: 0px;
+                        overflow: Chrome.phone ? elide : clip;
+                        text: Chrome.page == AppPage.week ? Calendar.period-week-title : Chrome.page == AppPage.day ? Calendar.period-day-title : Calendar.period-month-title;
+                        font-family: Palette.font-display;
+                        font-size: 1.15rem;
+                        font-weight: 600;
+                        color: period-touch.pressed ? Palette.mark-today : period-touch.has-hover ? Palette.accent : Palette.text-primary;
+                        animate color { duration: 120ms; easing: ease-out; }
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        min-width: 0px;
+                        overflow: Chrome.phone ? elide : clip;
+                        text: Calendar.period-subtitle;
+                        font-family: Palette.font-ui;
+                        font-size: 0.8rem;
+                        color: Palette.lunar-day;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+
+            IconButton {
+                size: Chrome.phone ? 32px : 36px;
+                icon: @image-url("icons/chevron-right.svg");
+                tip: Chrome.phone ? "" : I18n.next;
+                clicked => {
+                    Calendar.next-period();
+                }
+            }
+
+            if (Chrome.phone): IconButton {
+                size: 32px;
+                icon: @image-url("icons/month.svg");
+                clicked => {
+                    Calendar.go-today();
+                }
+            }
+
+            if (!Chrome.phone): InkButton {
+                label: I18n.today;
+                quiet: true;
+                clicked => {
+                    Calendar.go-today();
+                }
+            }
+        }
+
+        if (Chrome.page == AppPage.settings): Text {
+            text: I18n.nav-settings;
+            font-family: Palette.font-display;
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: Palette.text-primary;
+            vertical-alignment: center;
+        }
+        if (Chrome.page == AppPage.about): Text {
+            text: I18n.nav-about;
+            font-family: Palette.font-display;
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: Palette.text-primary;
+            vertical-alignment: center;
+        }
+
+        if (!Chrome.phone): Rectangle { horizontal-stretch: 1; }
+
+        if (!Chrome.phone && (Chrome.page == AppPage.day || Chrome.page == AppPage.week || Chrome.page == AppPage.month)): InkButton {
+            label: I18n.event;
+            has-icon: true;
+            icon: @image-url("icons/plus.svg");
+            clicked => {
+                Calendar.open-event-sheet();
+            }
+        }
+
+        if (Chrome.phone && (Chrome.page == AppPage.day || Chrome.page == AppPage.week || Chrome.page == AppPage.month)): IconButton {
+            size: 32px;
+            icon: @image-url("icons/plus.svg");
+            clicked => {
+                Calendar.open-event-sheet();
+            }
+        }
+
+        IconButton {
+            size: Chrome.phone ? 32px : 36px;
+            icon: Theme.dark ? @image-url("icons/moon.svg") : @image-url("icons/sun.svg");
+            tip: Chrome.phone ? "" : (Theme.dark ? I18n.switch-to-light : I18n.switch-to-dark);
+            clicked => {
+                Theme.toggle-explicit();
+            }
+        }
+    }
+}

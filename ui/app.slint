@@ -1,0 +1,81 @@
+import { Palette, AppPage, Theme } from "theme-default.slint";
+import { Chrome, Calendar, Sync, Profiles } from "demo-data.slint";
+import { I18n } from "i18n.slint";
+import { Sidebar } from "sidebar.slint";
+import { Header } from "header.slint";
+import { MonthView } from "month-view.slint";
+import { WeekView } from "week-view.slint";
+import { DayView } from "day-view.slint";
+import { SettingsView } from "settings-view.slint";
+import { AboutView } from "about-view.slint";
+import { JumpPopup, EventSheet, DayListPopup, ProfileSheet } from "overlays.slint";
+
+export { Palette, Chrome, Calendar, Sync, I18n, Theme, Profiles }
+
+export component AppWindow inherits Window {
+    title: I18n.app-name;
+    full-screen: false;
+    preferred-width: Chrome.phone ? 412px : 1440px;
+    preferred-height: Chrome.phone ? 915px : 900px;
+    min-width: Chrome.phone ? 360px : 1280px;
+    min-height: Chrome.phone ? 640px : 720px;
+    background: Palette.bg-app;
+    default-font-family: Palette.font-ui;
+    default-font-size: 14px;
+    forward-focus: back-keys;
+
+    // Key.Back is the Android back gesture. Rejecting it lets the activity finish.
+    back-keys := FocusScope {
+        capture-key-pressed(event) => {
+            if (event.text == Key.Back && Chrome.go-back()) {
+                return accept;
+            }
+            return reject;
+        }
+
+        // Keep interactive chrome in the OS safe area (status bar / gesture inset).
+        safe := Rectangle {
+        x: root.safe-area-insets.left;
+        y: root.safe-area-insets.top;
+        width: max(root.width - root.safe-area-insets.left - root.safe-area-insets.right, 0px);
+        height: max(root.height - root.safe-area-insets.top - root.safe-area-insets.bottom, 0px);
+
+        HorizontalLayout {
+            if (!Chrome.phone): Sidebar { }
+            VerticalLayout {
+                Header { }
+                if (Chrome.page == AppPage.month): MonthView { }
+                if (Chrome.page == AppPage.week): WeekView { }
+                if (Chrome.page == AppPage.day): DayView { }
+                if (Chrome.page == AppPage.settings): SettingsView { }
+                if (Chrome.page == AppPage.about): AboutView { }
+            }
+        }
+
+        // Phone: overlay under the header so the menu button can close it.
+        if (Chrome.phone && Chrome.sidebar-open): Rectangle {
+            x: 0px;
+            y: Palette.header-height;
+            width: 100%;
+            height: parent.height - Palette.header-height;
+            background: Palette.overlay;
+            TouchArea {
+                clicked => {
+                    Chrome.sidebar-open = false;
+                }
+            }
+            Sidebar {
+                close-on-navigate: true;
+                x: 0px;
+                y: 0px;
+                height: 100%;
+            }
+        }
+
+        if (Chrome.jump-open): JumpPopup { }
+        if (Chrome.day-list-open): DayListPopup { }
+        if (Chrome.event-sheet-open): EventSheet { }
+        if (Chrome.profile-sheet-open): ProfileSheet { }
+        }
+    }
+}
