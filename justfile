@@ -8,8 +8,8 @@ android:
     rm -rf mobile/app/src/main/jniLibs
     rm -rf mobile/app/src/main/assets
     mkdir -p mobile/app/src/main/assets
-    rsync -a app/assets/ mobile/app/src/main/assets/
-    cd app && cargo ndk -t arm64-v8a -p 36 -o ../mobile/app/src/main/jniLibs build --release --lib
+    rsync -a assets/ mobile/app/src/main/assets/
+    cargo ndk -t arm64-v8a -p 36 -o ./mobile/app/src/main/jniLibs build --release --lib
     #cd mobile && ./gradlew assembleDebug
     #mkdir -p output
     #cp mobile/app/build/outputs/apk/debug/app-debug.apk output/rurarendar.apk
