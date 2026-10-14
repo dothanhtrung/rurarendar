@@ -99,7 +99,7 @@ export component WeekView inherits Rectangle {
                         }
                         Text {
                             text: Calendar.week-days[d].lunar;
-                            color: Palette.lunar-day;
+                            color: Calendar.week-days[d].lunar-day == 1 || Calendar.week-days[d].lunar-day == 15 ? Palette.text-holiday : Palette.lunar-day;
                             font-size: 0.75rem;
                             horizontal-alignment: center;
                         }

@@ -439,7 +439,7 @@ export component DateCell inherits Rectangle {
             text: data.lunar;
             font-family: Palette.font-ui;
             font-size: 0.8rem;
-            color: Palette.lunar-day;
+            color: data.lunar-day == 1 || data.lunar-day == 15 ? Palette.text-holiday : Palette.lunar-day;
         }
 
         Rectangle {
