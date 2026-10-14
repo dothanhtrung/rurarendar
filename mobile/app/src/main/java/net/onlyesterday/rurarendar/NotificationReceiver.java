@@ -1,4 +1,4 @@
-package dev.rurarendar.app;
+package net.onlyesterday.rurarendar;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;

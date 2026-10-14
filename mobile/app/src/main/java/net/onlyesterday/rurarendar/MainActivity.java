@@ -1,4 +1,4 @@
-package dev.rurarendar.app;
+package net.onlyesterday.rurarendar;
 
 import android.Manifest;
 import android.app.NativeActivity;

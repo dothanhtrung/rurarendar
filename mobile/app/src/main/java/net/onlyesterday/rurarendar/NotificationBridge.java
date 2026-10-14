@@ -1,4 +1,4 @@
-package dev.rurarendar.app;
+package net.onlyesterday.rurarendar;
 
 import android.app.AlarmManager;
 import android.app.Notification;
@@ -87,7 +87,7 @@ final class NotificationBridge {
                     .putString(QUEUE, queue.toString())
                     .apply();
             Intent intent = new Intent(context, NotificationReceiver.class)
-                    .setAction("dev.rurarendar.app.SHOW_EVENT_ALERT")
+                    .setAction("net.onlyesterday.rurarendar.SHOW_EVENT_ALERT")
                     .putExtra("id", next.optString("id"))
                     .putExtra("title", next.optString("title"))
                     .putExtra("body", next.optString("body"));

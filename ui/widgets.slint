@@ -19,19 +19,24 @@ export component PopupWatch inherits Rectangle {
     }
 }
 
-// Vertical wheel or swipe moves to the previous or next period.
+// Wheel or swipe moves to the previous or next period (day / week / month).
+// Vertical: finger up or wheel down → next. Horizontal: finger left → next.
 // One mouse notch is one step. A short press still reaches the children.
 export component PeriodGesture inherits Rectangle {
     in property <bool> enabled: true;
+    in property <bool> vertical: true;
+    in property <bool> horizontal: true;
 
-    private property <length> carry: 0px;
+    private property <length> carry-x: 0px;
+    private property <length> carry-y: 0px;
     private property <length> step: 48px;
 
     function turn(next: bool) {
         if (!root.enabled) {
             return;
         }
-        root.carry = 0px;
+        root.carry-x = 0px;
+        root.carry-y = 0px;
         if (next) {
             Calendar.next-period();
         } else {
@@ -40,12 +45,21 @@ export component PeriodGesture inherits Rectangle {
     }
 
     SwipeGestureHandler {
-        enabled: root.enabled;
-        handle-swipe-up: true;
-        handle-swipe-down: true;
+        enabled: root.enabled && (root.vertical || root.horizontal);
+        handle-swipe-up: root.enabled && root.vertical;
+        handle-swipe-down: root.enabled && root.vertical;
+        handle-swipe-left: root.enabled && root.horizontal;
+        handle-swipe-right: root.enabled && root.horizontal;
         swiped => {
-            // Finger moving up reveals the next period, same as a downward wheel.
-            root.turn(self.current-position.y < self.pressed-position.y);
+            let dx = self.current-position.x - self.pressed-position.x;
+            let dy = self.current-position.y - self.pressed-position.y;
+            if (root.horizontal && (!root.vertical || Math.abs(dx) >= Math.abs(dy))) {
+                // Finger moving left reveals the next period, like turning a page.
+                root.turn(dx < 0px);
+            } else if (root.vertical) {
+                // Finger moving up reveals the next period, same as a downward wheel.
+                root.turn(dy < 0px);
+            }
         }
 
         TouchArea {
@@ -54,13 +68,28 @@ export component PeriodGesture inherits Rectangle {
                 if (!root.enabled) {
                     return reject;
                 }
-                if ((root.carry > 0px && event.delta-y < 0px) || (root.carry < 0px && event.delta-y > 0px)) {
-                    root.carry = 0px;
+                if (root.horizontal && (!root.vertical || Math.abs(event.delta-x) >= Math.abs(event.delta-y))) {
+                    if ((root.carry-x > 0px && event.delta-x < 0px) || (root.carry-x < 0px && event.delta-x > 0px)) {
+                        root.carry-x = 0px;
+                    }
+                    root.carry-x += event.delta-x;
+                    if (root.carry-x <= -root.step) {
+                        root.turn(true);
+                    } else if (root.carry-x >= root.step) {
+                        root.turn(false);
+                    }
+                    return accept;
                 }
-                root.carry += event.delta-y;
-                if (root.carry <= -root.step) {
+                if (!root.vertical) {
+                    return reject;
+                }
+                if ((root.carry-y > 0px && event.delta-y < 0px) || (root.carry-y < 0px && event.delta-y > 0px)) {
+                    root.carry-y = 0px;
+                }
+                root.carry-y += event.delta-y;
+                if (root.carry-y <= -root.step) {
                     root.turn(true);
-                } else if (root.carry >= root.step) {
+                } else if (root.carry-y >= root.step) {
                     root.turn(false);
                 }
                 accept
@@ -122,6 +151,7 @@ export component InkButton inherits Rectangle {
     background: accent ? Palette.accent : quiet ? (ta.has-hover ? Palette.bg-hover : transparent) : Palette.ink;
     border-width: quiet ? 1px : 0;
     border-color: Palette.border;
+    min-width: 0px;
     min-height: 36px;
     horizontal-stretch: 0;
 
@@ -158,6 +188,7 @@ export component InkButton inherits Rectangle {
                 font-size: 0.9rem;
                 font-weight: 600;
                 vertical-alignment: center;
+                wrap: word-wrap;
             }
         }
     }
@@ -431,6 +462,7 @@ export component Field inherits Rectangle {
     in property <string> placeholder;
     in property <string> label;
     in property <bool> secret: false;
+    min-width: 0px;
     min-height: 60px;
     VerticalLayout {
         spacing: 6px;
@@ -439,6 +471,7 @@ export component Field inherits Rectangle {
             color: Palette.text-secondary;
             font-size: 0.8rem;
             font-weight: 600;
+            wrap: word-wrap;
         }
 
         Rectangle {
@@ -456,6 +489,7 @@ export component Field inherits Rectangle {
                     font-size: 0.95rem;
                     font-family: Palette.font-ui;
                     single-line: true;
+                    min-width: 0px;
                     input-type: root.secret ? InputType.password : InputType.text;
                     vertical-alignment: center;
                 }
@@ -468,6 +502,7 @@ export component CheckRow inherits Rectangle {
     in property <string> label;
     in-out property <bool> checked: false;
     callback toggled();
+    min-width: 0px;
     min-height: 36px;
     ta := TouchArea {
         mouse-cursor: pointer;
@@ -502,6 +537,9 @@ export component CheckRow inherits Rectangle {
             color: Palette.text-primary;
             font-size: 0.9rem;
             vertical-alignment: center;
+            wrap: word-wrap;
+            min-width: 0px;
+            horizontal-stretch: 1;
         }
 
         Rectangle {
@@ -515,6 +553,7 @@ export component SelectField inherits Rectangle {
     in property <[string]> options;
     in-out property <int> index: 0;
     callback changed(int);
+    min-width: 0px;
     min-height: 60px;
     VerticalLayout {
         spacing: 6px;
@@ -547,6 +586,8 @@ export component SelectField inherits Rectangle {
                     font-size: 0.95rem;
                     vertical-alignment: center;
                     horizontal-stretch: 1;
+                    min-width: 0px;
+                    overflow: elide;
                 }
 
                 Text {
@@ -617,14 +658,16 @@ export component EventRow inherits Rectangle {
     in property <string> delete-label;
     callback clicked();
     callback delete();
+    min-width: 0px;
     min-height: 48px;
+    clip: true;
     opacity: root.enabled ? 1 : 0.45;
     border-radius: Palette.radius-sm;
-    background: ta.has-hover ? Palette.bg-hover : transparent;
+    background: ta.has-hover || body-ta.has-hover ? Palette.bg-hover : transparent;
     Rectangle {
         border-radius: parent.border-radius;
         background: Palette.accent;
-        opacity: ta.pressed ? 0.18 : 0;
+        opacity: ta.pressed || body-ta.pressed ? 0.18 : 0;
         animate opacity { duration: 120ms; easing: ease-out; }
     }
     ta := TouchArea {
@@ -639,33 +682,53 @@ export component EventRow inherits Rectangle {
         spacing: 12px;
         alignment: space-between;
         cross-axis-alignment: center;
+        min-width: 0px;
 
-        HorizontalLayout {
-            alignment: start;
-            padding: 8px;
-            spacing: 12px;
-
-            Rectangle {
-                width: 4px;
-                height: 28px;
-                border-radius: 2px;
-                background: mark;
-            }
-
-            VerticalLayout {
-                alignment: center;
-                horizontal-stretch: 1;
-                Text {
-                    text: title;
-                    color: Palette.text-primary;
-                    font-size: 0.95rem;
-                    font-weight: 600;
+        Flickable {
+            horizontal-stretch: 1;
+            min-width: 0px;
+            min-height: 32px;
+            interactive: true;
+            content-height: self.height;
+            content-width: max(body.preferred-width, self.width);
+            body := Rectangle {
+                x: 0px;
+                y: 0px;
+                height: 100%;
+                width: max(inner.preferred-width, parent.width);
+                body-ta := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.clicked();
+                    }
                 }
+                inner := HorizontalLayout {
+                    alignment: start;
+                    padding: 8px;
+                    spacing: 12px;
 
-                Text {
-                    text: time;
-                    color: Palette.text-muted;
-                    font-size: 0.8rem;
+                    Rectangle {
+                        width: 4px;
+                        height: 28px;
+                        border-radius: 2px;
+                        background: mark;
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        Text {
+                            text: title;
+                            color: Palette.text-primary;
+                            font-size: 0.95rem;
+                            font-weight: 600;
+                        }
+
+                        Text {
+                            text: time;
+                            color: Palette.text-muted;
+                            font-size: 0.8rem;
+                        }
+                    }
                 }
             }
         }

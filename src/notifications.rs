@@ -171,7 +171,7 @@ fn schedule_android(schedules: &str) -> anyhow::Result<()> {
         let context_object = unsafe { JObject::from_raw(env, context.context().cast()) };
         let schedules = JObject::from(env.new_string(schedules)?);
         env.call_static_method(
-            jni::jni_str!("dev/rurarendar/app/NotificationBridge"),
+            jni::jni_str!("net/onlyesterday/rurarendar/NotificationBridge"),
             jni::jni_str!("scheduleAll"),
             jni::jni_sig!("(Landroid/content/Context;Ljava/lang/String;)V"),
             &[

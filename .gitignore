@@ -11,7 +11,9 @@ mobile/app/.cxx/
 mobile/app/src/main/jniLibs/
 mobile/app/src/main/assets/
 *.apk
+*.aap
 *.so
+*.a
 
 target/
 Cargo.lock

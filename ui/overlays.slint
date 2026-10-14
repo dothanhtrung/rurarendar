@@ -108,6 +108,7 @@ component SheetTab inherits Rectangle {
     border-radius: 16px;
     background: active ? Palette.ink : Palette.bg-hover;
     height: 32px;
+    min-width: 0px;
     horizontal-stretch: 1;
     ta := TouchArea {
         mouse-cursor: pointer;
@@ -121,6 +122,7 @@ component SheetTab inherits Rectangle {
             font-size: 0.85rem;
             horizontal-alignment: center;
             vertical-alignment: center;
+            overflow: elide;
         }
     }
 }
@@ -134,10 +136,11 @@ export component DayListPopup inherits Rectangle {
     }
 
     Rectangle {
-        width: min(440px, parent.width - 32px);
+        width: min(440px, max(parent.width - 32px, 0px));
         x: (parent.width - self.width) / 2;
         y: max((parent.height - self.height) / 2, 24px);
-        height: min(box.preferred-height, parent.height - 48px);
+        height: min(box.preferred-height, max(parent.height - 48px, 120px));
+        clip: true;
         border-radius: 12px;
         background: Palette.bg-surface;
         drop-shadow-blur: 32px;
@@ -146,13 +149,14 @@ export component DayListPopup inherits Rectangle {
         TouchArea { }
 
         box := VerticalLayout {
-            padding: 24px;
+            padding: Chrome.phone ? 16px : 24px;
             spacing: 12px;
 
             HorizontalLayout {
                 VerticalLayout {
                     spacing: 2px;
                     horizontal-stretch: 1;
+                    min-width: 0px;
                     Text {
                         text: Calendar.period-day-title;
                         font-family: Palette.font-display;
@@ -184,7 +188,12 @@ export component DayListPopup inherits Rectangle {
             }
             if (Calendar.day-popup-items.length > 0): Flickable {
                 horizontal-stretch: 1;
-                height: min(list.preferred-height, 360px);
+                vertical-stretch: 1;
+                min-width: 0px;
+                min-height: 0px;
+                preferred-height: list.preferred-height;
+                max-height: list.preferred-height;
+                interactive: true;
                 content-height: max(list.preferred-height, 1px);
                 content-width: self.width;
                 list := VerticalLayout {
@@ -232,10 +241,11 @@ export component EventSheet inherits Rectangle {
     }
 
     Rectangle {
-        width: 480px;
+        width: min(480px, max(parent.width - 32px, 0px));
         x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
+        y: max((parent.height - self.height) / 2, 16px);
         height: min(box.preferred-height, max(parent.height - 32px, 200px));
+        clip: true;
         border-radius: 12px;
         background: Palette.bg-surface;
         drop-shadow-blur: 32px;
@@ -248,7 +258,7 @@ export component EventSheet inherits Rectangle {
             content-height: max(box.preferred-height, 1px);
         box := VerticalLayout {
             width: parent.width;
-            padding: 24px;
+            padding: Chrome.phone ? 16px : 24px;
             spacing: 12px;
             HorizontalLayout {
                 Text {
@@ -257,8 +267,11 @@ export component EventSheet inherits Rectangle {
                     font-size: 1.2rem;
                     font-weight: 600;
                     color: Palette.text-primary;
+                    wrap: word-wrap;
+                    horizontal-stretch: 1;
+                    min-width: 0px;
+                    vertical-alignment: center;
                 }
-                Rectangle { horizontal-stretch: 1; }
                 IconButton {
                     icon: @image-url("icons/close.svg");
                     clicked => {
@@ -292,17 +305,17 @@ export component EventSheet inherits Rectangle {
                 spacing: 8px;
                 HorizontalLayout {
                     spacing: 8px;
-                    Field { label: I18n.lunar-year; text <=> Calendar.event-lunar-year; horizontal-stretch: 1; }
-                    Field { label: I18n.lunar-month; text <=> Calendar.event-lunar-month; horizontal-stretch: 1; }
-                    Field { label: I18n.lunar-day; text <=> Calendar.event-lunar-day; horizontal-stretch: 1; }
+                    Field { label: I18n.lunar-year; text <=> Calendar.event-lunar-year; horizontal-stretch: 1; min-width: 0px; }
+                    Field { label: I18n.lunar-month; text <=> Calendar.event-lunar-month; horizontal-stretch: 1; min-width: 0px; }
+                    Field { label: I18n.lunar-day; text <=> Calendar.event-lunar-day; horizontal-stretch: 1; min-width: 0px; }
                 }
                 CheckRow { label: I18n.leap-month; checked <=> Calendar.event-lunar-leap; }
             }
             CheckRow { label: I18n.all-day; checked <=> Calendar.event-all-day; }
             if (!Calendar.event-all-day): HorizontalLayout {
                 spacing: 12px;
-                Field { label: I18n.start; text <=> Calendar.event-start; horizontal-stretch: 1; }
-                Field { label: I18n.end; text <=> Calendar.event-end; horizontal-stretch: 1; }
+                Field { label: I18n.start; text <=> Calendar.event-start; horizontal-stretch: 1; min-width: 0px; }
+                Field { label: I18n.end; text <=> Calendar.event-end; horizontal-stretch: 1; min-width: 0px; }
             }
             CheckRow { label: I18n.reminder; checked <=> Calendar.event-reminder-on; }
             Text {
@@ -332,6 +345,8 @@ export component EventSheet inherits Rectangle {
                     InkButton {
                         label: I18n.disable-event;
                         quiet: true;
+                        horizontal-stretch: 1;
+                        min-width: 0px;
                         clicked => {
                             Calendar.apply-item-action(0);
                         }
@@ -339,6 +354,8 @@ export component EventSheet inherits Rectangle {
                     InkButton {
                         label: I18n.enable-event;
                         quiet: true;
+                        horizontal-stretch: 1;
+                        min-width: 0px;
                         clicked => {
                             Calendar.apply-item-action(1);
                         }
@@ -349,6 +366,7 @@ export component EventSheet inherits Rectangle {
                     InkButton {
                         label: I18n.delete-event;
                         quiet: true;
+                        min-width: 0px;
                         clicked => {
                             Calendar.apply-item-action(2);
                         }

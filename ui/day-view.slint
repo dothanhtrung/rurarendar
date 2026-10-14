@@ -203,18 +203,22 @@ component DayEventsCard inherits Rectangle {
 export component DayView inherits Rectangle {
     background: Palette.bg-app;
 
-    if (Chrome.phone): Flickable {
-        content-width: self.width;
-        content-height: phone-col.preferred-height;
-        phone-col := VerticalLayout {
-            width: 100%;
-            padding: 12px;
-            spacing: 12px;
-            AlmanacCard {
-                compact: true;
-            }
-            DayEventsCard {
-                compact: true;
+    if (Chrome.phone): PeriodGesture {
+        // Vertical flicks stay on the content Flickable; left/right still changes day.
+        vertical: false;
+        Flickable {
+            content-width: self.width;
+            content-height: phone-col.preferred-height;
+            phone-col := VerticalLayout {
+                width: 100%;
+                padding: 12px;
+                spacing: 12px;
+                AlmanacCard {
+                    compact: true;
+                }
+                DayEventsCard {
+                    compact: true;
+                }
             }
         }
     }
