@@ -106,6 +106,10 @@ export global Chrome {
             profile-sheet-open = false;
             return true;
         }
+        if (Feeds.sheet-open) {
+            Feeds.sheet-open = false;
+            return true;
+        }
         if (day-list-open) {
             day-list-open = false;
             return true;
@@ -129,6 +133,7 @@ export global Chrome {
 export global Profiles {
     in-out property <[ProfileRow]> items;
     in-out property <string> active-id;
+    in-out property <int> normal-count: 1;
     in-out property <string> sheet-title;
     in-out property <string> sheet-name;
     in-out property <string> sheet-path;
@@ -140,6 +145,18 @@ export global Profiles {
     callback open-create();
     callback open-import();
     callback save-sheet();
+}
+
+export global Feeds {
+    in-out property <[ProfileRow]> items;
+    in-out property <bool> sheet-open: false;
+    in-out property <string> sheet-url;
+    in-out property <string> sheet-name;
+    in-out property <string> sheet-error;
+    callback open-add();
+    callback save();
+    callback toggle(string);
+    callback delete(string);
 }
 
 export global Sync {

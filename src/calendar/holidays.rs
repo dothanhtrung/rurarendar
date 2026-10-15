@@ -171,7 +171,12 @@ impl HolidayTables {
                 }
             }
             CatalogLoad::Slugs { slugs, dirs } => {
+                let mut seen = Vec::new();
                 for slug in slugs {
+                    if seen.contains(slug) {
+                        continue;
+                    }
+                    seen.push(slug.clone());
                     for dir in dirs {
                         for (year, path) in scan_catalog_csvs(dir, slug) {
                             let csv = read_year_csv(&path)?;

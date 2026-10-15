@@ -1,5 +1,5 @@
 import { Palette, AppPage, Theme } from "theme-default.slint";
-import { Chrome, Calendar, Sync, Profiles } from "demo-data.slint";
+import { Chrome, Calendar, Sync, Profiles, Feeds } from "demo-data.slint";
 import { I18n } from "i18n.slint";
 import { Sidebar } from "sidebar.slint";
 import { Header } from "header.slint";
@@ -9,9 +9,9 @@ import { DayView } from "day-view.slint";
 import { EventListView } from "event-list-view.slint";
 import { SettingsView } from "settings-view.slint";
 import { AboutView } from "about-view.slint";
-import { JumpPopup, EventSheet, DayListPopup, ProfileSheet } from "overlays.slint";
+import { JumpPopup, EventSheet, DayListPopup, ProfileSheet, IcalSheet } from "overlays.slint";
 
-export { Palette, Chrome, Calendar, Sync, I18n, Theme, Profiles }
+export { Palette, Chrome, Calendar, Sync, I18n, Theme, Profiles, Feeds }
 
 export component AppWindow inherits Window {
     title: I18n.app-name;
@@ -78,6 +78,7 @@ export component AppWindow inherits Window {
         if (Chrome.day-list-open): DayListPopup { }
         if (Chrome.event-sheet-open): EventSheet { }
         if (Chrome.profile-sheet-open): ProfileSheet { }
+        if (Feeds.sheet-open): IcalSheet { }
         }
     }
 }

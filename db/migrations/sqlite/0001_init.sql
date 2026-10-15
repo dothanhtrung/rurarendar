@@ -12,6 +12,18 @@ create table if not exists events
     profile_id INTEGER default 0 not null
 );
 
+create table if not exists ical_feeds
+(
+    id         INTEGER           not null
+        primary key autoincrement,
+    url        TEXT              not null
+        unique,
+    name       TEXT              not null,
+    enabled    INTEGER default 1 not null,
+    body       TEXT              not null,
+    fetched_at INTEGER default 0 not null
+);
+
 create table if not exists outbox
 (
     item_id   INTEGER           not null
@@ -24,10 +36,12 @@ create table if not exists outbox
 
 create table if not exists profiles
 (
-    id      INTEGER            not null
+    id       INTEGER            not null
         primary key autoincrement,
-    name    TEXT               not null,
-    enabled INTEGER default 1  not null,
-    catalog TEXT    default '' not null,
-    sort    INTEGER default 0  not null
+    name     TEXT               not null,
+    enabled  INTEGER default 1  not null,
+    catalog  TEXT    default '' not null,
+    sort     INTEGER default 0  not null,
+    embedded INTEGER default 0  not null
 );
+

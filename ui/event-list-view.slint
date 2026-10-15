@@ -1,5 +1,5 @@
 import { ScrollView } from "std-widgets.slint";
-import { Palette, AgendaRow } from "theme-default.slint";
+import { Palette, AgendaRow, AppPage } from "theme-default.slint";
 import { Chrome, Calendar } from "demo-data.slint";
 import { I18n } from "i18n.slint";
 
@@ -7,6 +7,8 @@ component AgendaEvent inherits Rectangle {
     in property <string> title;
     in property <string> time;
     in property <bool> enabled: true;
+    in property <bool> holiday: false;
+    in property <bool> can-delete: true;
     in property <string> delete-label;
     callback clicked();
     callback delete();
@@ -26,7 +28,7 @@ component AgendaEvent inherits Rectangle {
             width: 4px;
             height: 28px;
             border-radius: 2px;
-            background: Palette.mark-event;
+            background: root.holiday ? Palette.mark-holiday : Palette.mark-event;
         }
 
         body := TouchArea {
@@ -59,7 +61,7 @@ component AgendaEvent inherits Rectangle {
             }
         }
 
-        Rectangle {
+        if (root.can-delete): Rectangle {
             border-radius: Palette.radius-sm;
             border-width: 1px;
             border-color: Palette.border;
@@ -111,9 +113,14 @@ component AgendaBody inherits VerticalLayout {
             title: root.rows[idx].title;
             time: root.rows[idx].time;
             enabled: root.rows[idx].enabled;
+            holiday: root.rows[idx].holiday;
+            can-delete: root.rows[idx].id != "";
             delete-label: I18n.row-delete;
             clicked => {
                 Calendar.open-listed-event(root.rows[idx].id, root.rows[idx].year, root.rows[idx].month, root.rows[idx].day);
+                if (root.rows[idx].id == "") {
+                    Chrome.open(AppPage.day);
+                }
             }
             delete => {
                 Calendar.delete-event(root.rows[idx].id);

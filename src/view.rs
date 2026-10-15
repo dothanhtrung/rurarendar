@@ -31,6 +31,11 @@ use crate::event::{
     EventStore,
     Occurrence,
 };
+use crate::ical::{
+    events_on,
+    IcalEvent,
+    IcalFeed,
+};
 use crate::profile::ProfileId;
 use crate::state::{
     AppState,
@@ -138,6 +143,23 @@ pub fn cell_from_date(
     }
 }
 
+fn overlay_feeds(cells: &mut [DayCellData], feeds: &[IcalFeed]) {
+    for cell in cells {
+        let Ok(date) = CivilDate::new(cell.year, cell.month as u8, cell.gregorian as u8) else {
+            continue;
+        };
+        let Some(event) = events_on(feeds, date).into_iter().next() else {
+            continue;
+        };
+        let already = cell.holiday;
+        cell.holiday = true;
+        cell.has_event = true;
+        if !already && cell.title.is_empty() {
+            cell.title = SharedString::from(event.summary.as_str());
+        }
+    }
+}
+
 fn overlay_events(cells: &mut [DayCellData], occs: &[Occurrence]) {
     for cell in cells {
         let Ok(date) = CivilDate::new(cell.year, cell.month as u8, cell.gregorian as u8) else {
@@ -180,6 +202,37 @@ fn week_timed(week: &[CivilDate; 7], occs: &[Occurrence]) -> Vec<TimedEvent> {
             id: SharedString::from(occ.event_id.0.to_string()),
             enabled: occ.enabled,
         });
+    }
+    out
+}
+
+fn feed_blocks(week: &[CivilDate; 7], feeds: &[IcalFeed]) -> Vec<TimedEvent> {
+    let mut out = Vec::new();
+    for (day, date) in week.iter().enumerate() {
+        for event in events_on(feeds, *date) {
+            if event.all_day {
+                continue;
+            }
+            let Some(start) = event.start_time else {
+                continue;
+            };
+            let hours = event
+                .end_time
+                .map(|end| {
+                    let delta = (end.minutes_from_midnight() - start.minutes_from_midnight()) as f32 / 60.0;
+                    if delta > 0.0 { delta } else { 1.0 }
+                })
+                .unwrap_or(1.0);
+            out.push(TimedEvent {
+                day: day as i32,
+                start_hour: f32::from(start.hour) + f32::from(start.minute) / 60.0,
+                hours,
+                title: SharedString::from(event.summary.as_str()),
+                holiday: true,
+                id: SharedString::new(),
+                enabled: true,
+            });
+        }
     }
     out
 }
@@ -227,10 +280,18 @@ fn occurrence_time(occ: &Occurrence, all_day: &str, during: &str) -> String {
 }
 
 /// One row per event. An alert clock, when set, is part of that row — not a second item.
-fn popup_items(occs: &[Occurrence], date: CivilDate, lang: UiLang) -> Vec<DayEvent> {
+fn popup_items(occs: &[Occurrence], holidays: &[Holiday], date: CivilDate, lang: UiLang) -> Vec<DayEvent> {
     let all_day = all_day_label(lang);
     let during = untimed_label(lang);
-    let mut rows = Vec::new();
+    let mut rows: Vec<DayEvent> = holidays
+        .iter()
+        .map(|holiday| DayEvent {
+            time: SharedString::from(all_day),
+            title: SharedString::from(holiday.name.as_str()),
+            id: SharedString::new(),
+            enabled: true,
+        })
+        .collect();
     for occ in occs.iter().filter(|occ| occ.civil == date) {
         rows.push(DayEvent {
             time: SharedString::from(marked_time(event_time_line(occ, all_day, during, lang), occ.enabled, lang)),
@@ -299,47 +360,184 @@ fn upcoming_occurrences(
     occs
 }
 
-fn agenda_rows(occs: &[Occurrence], alerts_only: bool, today: CivilDate, lang: UiLang) -> Vec<AgendaRow> {
+/// Next civil day of each enabled catalog holiday and festival, through the agenda window.
+/// A yearly rule always has its next day inside that window, so nothing is dropped as "too far".
+fn upcoming_observances(
+    holidays: &HolidayTables,
+    tables: &mut CalendarTables,
+    solar_terms: &mut SolarTermTables,
+    today: CivilDate,
+) -> Vec<Holiday> {
+    let until = today.saturating_add_days(AGENDA_HORIZON_DAYS);
+    let mut out = Vec::new();
+    let mut date = today;
+    loop {
+        let lunar = lookup(tables, date).ok();
+        let term = solar_terms.on_date(date).cloned();
+        out.extend(holidays.on_date(tables, date, lunar.as_ref(), term.as_ref()));
+        if date >= until {
+            break;
+        }
+        date = match date.add_days(1) {
+            Ok(next) => next,
+            Err(_) => break,
+        };
+    }
+    out
+}
+
+struct ListedObservance {
+    date: CivilDate,
+    name: String,
+    time: Option<String>,
+    minutes: i32,
+}
+
+fn listed_holiday(row: &Holiday) -> ListedObservance {
+    ListedObservance {
+        date: row.date,
+        name: row.name.clone(),
+        time: None,
+        minutes: 0,
+    }
+}
+
+fn listed_feeds(feeds: &[IcalFeed], today: CivilDate) -> Vec<ListedObservance> {
+    let until = today.saturating_add_days(AGENDA_HORIZON_DAYS);
+    let mut out = Vec::new();
+    for feed in feeds.iter().filter(|feed| feed.enabled) {
+        for event in &feed.events {
+            let mut date = if event.start < today { today } else { event.start };
+            while date < event.end_exclusive && date <= until {
+                let on_start = date == event.start;
+                out.push(ListedObservance {
+                    date,
+                    name: event.summary.clone(),
+                    time: if on_start { event.time_label() } else { None },
+                    minutes: if on_start { event.minutes() } else { 0 },
+                });
+                date = match date.add_days(1) {
+                    Ok(next) => next,
+                    Err(_) => break,
+                };
+            }
+        }
+    }
+    out
+}
+
+fn feed_day_extras(feeds: &[IcalFeed], date: CivilDate, lang: UiLang) -> (Vec<Holiday>, Vec<DayEvent>) {
+    let all_day = all_day_label(lang);
+    let mut holidays = Vec::new();
+    let mut timed = Vec::new();
+    for event in events_on(feeds, date) {
+        if event.all_day {
+            holidays.push(Holiday {
+                date,
+                name: event.summary.clone(),
+                kind: crate::calendar::ObservanceKind::Holiday,
+            });
+        } else {
+            timed.push(day_row_for_feed(event, all_day));
+        }
+    }
+    (holidays, timed)
+}
+
+fn day_row_for_feed(event: &IcalEvent, all_day: &str) -> DayEvent {
+    DayEvent {
+        time: SharedString::from(event.time_label().unwrap_or_else(|| all_day.to_string())),
+        title: SharedString::from(event.summary.as_str()),
+        id: SharedString::new(),
+        enabled: true,
+    }
+}
+
+fn insert_timed(rows: &mut Vec<DayEvent>, at: usize, timed: Vec<DayEvent>) {
+    rows.splice(at..at, timed);
+}
+
+fn agenda_rows(
+    occs: &[Occurrence],
+    observances: &[ListedObservance],
+    alerts_only: bool,
+    today: CivilDate,
+    lang: UiLang,
+) -> Vec<AgendaRow> {
     let all_day = all_day_label(lang);
     let during = untimed_label(lang);
+    let shown: Vec<&Occurrence> = occs
+        .iter()
+        .filter(|occ| !alerts_only || occ.reminder_enabled)
+        .collect();
+    // Built-ins have no alert, so they stay off the reminder list.
+    let observances = if alerts_only { &[][..] } else { observances };
     let mut rows = Vec::new();
     let mut last: Option<CivilDate> = None;
-    for occ in occs {
-        if alerts_only && !occ.reminder_enabled {
-            continue;
-        }
-        if last != Some(occ.civil) {
-            rows.push(agenda_header(occ, today, lang));
-            last = Some(occ.civil);
-        }
-        let time = marked_time(event_time_line(occ, all_day, during, lang), occ.enabled, lang);
-        rows.push(AgendaRow {
-            header: false,
-            title: SharedString::from(occ.title.as_str()),
-            time: SharedString::from(time),
-            id: SharedString::from(occ.event_id.0.to_string()),
-            enabled: occ.enabled,
-            year: occ.civil.year(),
-            month: i32::from(occ.civil.month()),
-            day: i32::from(occ.civil.day()),
-            today: occ.civil == today,
+    let mut i = 0;
+    let mut j = 0;
+    while i < shown.len() || j < observances.len() {
+        let observance_first = j < observances.len() && (i >= shown.len() || {
+            let occ_minutes = shown[i].start_time.map(|clock| clock.minutes_from_midnight()).unwrap_or(0);
+            observances[j].date < shown[i].civil
+                || (observances[j].date == shown[i].civil && observances[j].minutes <= occ_minutes)
         });
+        if observance_first {
+            let holiday = &observances[j];
+            j += 1;
+            note_agenda_day(&mut rows, &mut last, holiday.date, today, lang);
+            let time = holiday.time.clone().unwrap_or_else(|| all_day.to_string());
+            rows.push(AgendaRow {
+                header: false,
+                title: SharedString::from(holiday.name.as_str()),
+                time: SharedString::from(time),
+                id: SharedString::new(),
+                enabled: true,
+                holiday: true,
+                year: holiday.date.year(),
+                month: i32::from(holiday.date.month()),
+                day: i32::from(holiday.date.day()),
+                today: holiday.date == today,
+            });
+        } else {
+            let occ = shown[i];
+            i += 1;
+            note_agenda_day(&mut rows, &mut last, occ.civil, today, lang);
+            let time = marked_time(event_time_line(occ, all_day, during, lang), occ.enabled, lang);
+            rows.push(AgendaRow {
+                header: false,
+                title: SharedString::from(occ.title.as_str()),
+                time: SharedString::from(time),
+                id: SharedString::from(occ.event_id.0.to_string()),
+                enabled: occ.enabled,
+                holiday: false,
+                year: occ.civil.year(),
+                month: i32::from(occ.civil.month()),
+                day: i32::from(occ.civil.day()),
+                today: occ.civil == today,
+            });
+        }
     }
     rows
 }
 
-fn agenda_header(occ: &Occurrence, today: CivilDate, lang: UiLang) -> AgendaRow {
-    AgendaRow {
+fn note_agenda_day(rows: &mut Vec<AgendaRow>, last: &mut Option<CivilDate>, date: CivilDate, today: CivilDate, lang: UiLang) {
+    if *last == Some(date) {
+        return;
+    }
+    rows.push(AgendaRow {
         header: true,
-        title: SharedString::from(day_title_in(occ.civil, lang)),
+        title: SharedString::from(day_title_in(date, lang)),
         time: SharedString::new(),
         id: SharedString::new(),
         enabled: true,
-        year: occ.civil.year(),
-        month: i32::from(occ.civil.month()),
-        day: i32::from(occ.civil.day()),
-        today: occ.civil == today,
-    }
+        holiday: false,
+        year: date.year(),
+        month: i32::from(date.month()),
+        day: i32::from(date.day()),
+        today: date == today,
+    });
+    *last = Some(date);
 }
 
 pub fn refresh(ui: &AppWindow, state: &mut AppState) {
@@ -376,6 +574,7 @@ pub fn refresh(ui: &AppWindow, state: &mut AppState) {
         })
         .collect();
     overlay_events(&mut cells, &occs);
+    overlay_feeds(&mut cells, &state.feeds);
     let selected_index = cells
         .iter()
         .position(|cell| {
@@ -403,21 +602,37 @@ pub fn refresh(ui: &AppWindow, state: &mut AppState) {
         })
         .collect();
     overlay_events(&mut week_days, &occs);
+    overlay_feeds(&mut week_days, &state.feeds);
 
     let selected_cell = cells[selected_index as usize].clone();
     let selected_lunar = lookup(&mut state.tables, selected).ok();
     let selected_term = state.solar_terms.on_date(selected).cloned();
-    let day_holidays = state.holidays.on_date(
+    let mut day_holidays = state.holidays.on_date(
         &mut state.tables,
         selected,
         selected_lunar.as_ref(),
         selected_term.as_ref(),
     );
-    let day_events = day_event_rows(&occs, &day_holidays, selected, lang);
-    let day_popup_items = popup_items(&occs, selected, lang);
+    let (feed_holidays, feed_timed) = feed_day_extras(&state.feeds, selected, lang);
+    day_holidays.extend(feed_holidays);
+    let mut day_events = day_event_rows(&occs, &day_holidays, selected, lang);
+    insert_timed(&mut day_events, day_holidays.len(), feed_timed.clone());
+    let mut day_popup_items = popup_items(&occs, &day_holidays, selected, lang);
+    insert_timed(&mut day_popup_items, day_holidays.len(), feed_timed);
     let upcoming = upcoming_occurrences(&state.events, &mut state.tables, today, &enabled);
-    let upcoming_events = agenda_rows(&upcoming, false, today, lang);
-    let upcoming_alerts = agenda_rows(&upcoming, true, today, lang);
+    let mut observances: Vec<ListedObservance> = upcoming_observances(
+        &state.holidays,
+        &mut state.tables,
+        &mut state.solar_terms,
+        today,
+    )
+    .iter()
+    .map(listed_holiday)
+    .collect();
+    observances.extend(listed_feeds(&state.feeds, today));
+    observances.sort_by(|a, b| a.date.cmp(&b.date).then(a.minutes.cmp(&b.minutes)).then(a.name.cmp(&b.name)));
+    let upcoming_events = agenda_rows(&upcoming, &observances, false, today, lang);
+    let upcoming_alerts = agenda_rows(&upcoming, &observances, true, today, lang);
     let subtitle = if selected_cell.lunar_month_name.is_empty() {
         SharedString::new()
     } else if let Ok(lunar) = lookup(&mut state.tables, selected) {
@@ -429,7 +644,9 @@ pub fn refresh(ui: &AppWindow, state: &mut AppState) {
     let cal = ui.global::<Calendar>();
     cal.set_cells(ModelRc::new(VecModel::from(cells)));
     cal.set_week_days(ModelRc::new(VecModel::from(week_days)));
-    cal.set_week_events(ModelRc::new(VecModel::from(week_timed(&week, &occs))));
+    let mut week_events = week_timed(&week, &occs);
+    week_events.extend(feed_blocks(&week, &state.feeds));
+    cal.set_week_events(ModelRc::new(VecModel::from(week_events)));
     cal.set_day_events(ModelRc::new(VecModel::from(day_events)));
     cal.set_day_popup_items(ModelRc::new(VecModel::from(day_popup_items)));
     cal.set_upcoming_events(ModelRc::new(VecModel::from(upcoming_events)));
@@ -452,6 +669,7 @@ pub fn refresh(ui: &AppWindow, state: &mut AppState) {
     cal.set_jump_error(SharedString::new());
     cal.set_day_list_status(SharedString::new());
     refresh_profiles(ui, state);
+    refresh_feeds(ui, state);
 }
 
 fn refresh_profiles(ui: &AppWindow, state: &AppState) {
@@ -463,11 +681,29 @@ fn refresh_profiles(ui: &AppWindow, state: &AppState) {
             name: SharedString::from(profile.name.as_str()),
             enabled: profile.enabled,
             active: profile.id == state.active_profile,
+            embedded: profile.embedded,
         })
         .collect();
+    let normal = state.profiles.iter().filter(|profile| !profile.embedded).count() as i32;
     let g = ui.global::<crate::ui::Profiles>();
     g.set_items(ModelRc::new(VecModel::from(rows)));
     g.set_active_id(SharedString::from(state.active_profile.0.to_string()));
+    g.set_normal_count(normal);
+}
+
+fn refresh_feeds(ui: &AppWindow, state: &AppState) {
+    let rows: Vec<crate::ui::ProfileRow> = state
+        .feeds
+        .iter()
+        .map(|feed| crate::ui::ProfileRow {
+            id: SharedString::from(feed.id.to_string()),
+            name: SharedString::from(feed.name.as_str()),
+            enabled: feed.enabled,
+            active: false,
+            embedded: false,
+        })
+        .collect();
+    ui.global::<crate::ui::Feeds>().set_items(ModelRc::new(VecModel::from(rows)));
 }
 
 #[cfg(test)]
@@ -505,7 +741,7 @@ mod tests {
         let with_reminder = occ(date, "Họp", Some(ClockTime { hour: 8, minute: 0 }));
         let plain = occ(date, "Ăn trưa", None);
         let elsewhere = occ(other, "Khác", Some(ClockTime::REMINDER_DEFAULT));
-        let rows = popup_items(&[with_reminder.clone(), plain.clone(), elsewhere], date, UiLang::Vi);
+        let rows = popup_items(&[with_reminder.clone(), plain.clone(), elsewhere], &[], date, UiLang::Vi);
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].title.as_str(), "Họp");
         assert_eq!(rows[0].time.as_str(), "09:00 – 10:30 · Báo 08:00");
@@ -521,7 +757,7 @@ mod tests {
         let mut row = occ(date, "Họp", Some(ClockTime { hour: 8, minute: 0 }));
         row.enabled = false;
         row.reminder_enabled = false;
-        let popup = popup_items(&[row.clone()], date, UiLang::En);
+        let popup = popup_items(&[row.clone()], &[], date, UiLang::En);
         assert_eq!(popup.len(), 1);
         assert!(!popup[0].enabled);
         assert_eq!(popup[0].title.as_str(), "Họp");
@@ -568,7 +804,7 @@ mod tests {
         next.event_id = EventId(3);
         let occs = [alert, plain, next];
 
-        let events = agenda_rows(&occs, false, today, UiLang::En);
+        let events = agenda_rows(&occs, &[], false, today, UiLang::En);
         assert!(events[0].header && events[0].today);
         assert_eq!(events[0].title.as_str(), day_title_in(today, UiLang::En));
         assert_eq!(events[1].title.as_str(), "Họp");
@@ -581,7 +817,7 @@ mod tests {
         assert_eq!(events[4].title.as_str(), "Sinh nhật");
         assert_eq!(events.len(), 5);
 
-        let alerts = agenda_rows(&occs, true, today, UiLang::En);
+        let alerts = agenda_rows(&occs, &[], true, today, UiLang::En);
         let titles: Vec<_> = alerts.iter().filter(|row| !row.header).map(|row| row.title.as_str()).collect();
         assert_eq!(titles, ["Họp", "Sinh nhật"]);
         assert_eq!(alerts.iter().filter(|row| row.header).count(), 2);
@@ -641,11 +877,67 @@ mod tests {
         let daily = occs.iter().filter(|occ| occ.title == "Mỗi ngày").count();
         assert_eq!(daily, (AGENDA_HORIZON_DAYS + 1) as usize);
 
-        let alerts = agenda_rows(&occs, true, today, UiLang::Vi);
+        let alerts = agenda_rows(&occs, &[], true, today, UiLang::Vi);
         let alert_titles: Vec<_> = alerts.iter().filter(|row| !row.header).map(|row| row.title.as_str()).collect();
         assert!(alert_titles.contains(&"Hôm nay"));
         assert!(alert_titles.contains(&"Mỗi ngày"));
         assert!(!alert_titles.contains(&"Ngày mai"));
         assert!(!alert_titles.contains(&"Xa"));
+    }
+
+    #[test]
+    fn upcoming_list_includes_holidays_and_festivals() {
+        let today = CivilDate::new(2026, 10, 15).unwrap();
+        let soon = CivilDate::new(2026, 10, 20).unwrap();
+        let dir = std::env::temp_dir().join(format!(
+            "rurarendar-agenda-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("2026.csv"),
+            r#"catalog_id,kind,name_vi,rule,extra
+holiday.quoc-khanh,holiday,Quốc khánh,G-09-02,
+festival.soon,festival,Sắp tới,G-10-20,
+holiday.tet,holiday,Tết Dương lịch,G-01-01,
+festival.hung,festival,Giỗ Tổ Hùng Vương,L-3-10,
+"#,
+        )
+        .unwrap();
+        let holidays = HolidayTables::from_dir(dir.clone()).unwrap();
+        let mut tables = CalendarTables::new(2026).unwrap();
+        let mut terms = SolarTermTables::new(2026).unwrap();
+        let observances = upcoming_observances(&holidays, &mut tables, &mut terms, today);
+        assert!(observances.iter().all(|row| row.date >= today));
+        assert!(observances.iter().all(|row| row.date <= today.saturating_add_days(AGENDA_HORIZON_DAYS)));
+        let quoc: Vec<_> = observances.iter().filter(|row| row.name == "Quốc khánh").collect();
+        assert_eq!(quoc.len(), 1);
+        assert_eq!(quoc[0].date, CivilDate::new(2027, 9, 2).unwrap());
+        assert!(observances.iter().any(|row| row.name == "Tết Dương lịch" && row.date == CivilDate::new(2027, 1, 1).unwrap()));
+        let hung = observances.iter().find(|row| row.name == "Giỗ Tổ Hùng Vương").expect("next lunar festival");
+        assert!(hung.date > today);
+        assert_eq!(hung.date.year(), 2027);
+
+        let mut meeting = occ(soon, "Họp", Some(ClockTime { hour: 9, minute: 0 }));
+        meeting.event_id = EventId(4);
+        let listed: Vec<_> = observances.iter().map(listed_holiday).collect();
+        let rows = agenda_rows(std::slice::from_ref(&meeting), &listed, false, today, UiLang::Vi);
+        let soon_rows: Vec<_> = rows.iter().filter(|row| row.year == 2026 && row.month == 10 && row.day == 20).collect();
+        assert!(soon_rows[0].header);
+        assert!(soon_rows[1].holiday);
+        assert_eq!(soon_rows[1].title.as_str(), "Sắp tới");
+        assert_eq!(soon_rows[1].time.as_str(), "Cả ngày");
+        assert!(soon_rows[1].id.is_empty());
+        assert!(!soon_rows[2].holiday);
+        assert_eq!(soon_rows[2].title.as_str(), "Họp");
+
+        let alerts = agenda_rows(std::slice::from_ref(&meeting), &listed, true, today, UiLang::Vi);
+        let alert_titles: Vec<_> = alerts.iter().filter(|row| !row.header).map(|row| row.title.as_str()).collect();
+        assert_eq!(alert_titles, ["Họp"]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

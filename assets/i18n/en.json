@@ -143,5 +143,14 @@
   "profile_path": "Catalog folder",
   "profile_path_hint": "Folder of {profile}-{year}.csv files (e.g. vn-2026.csv), or YYYY.csv. Leave empty for no holidays.",
   "profile_one_required": "Keep at least one profile.",
-  "profile_name_required": "Enter a name."
+  "profile_name_required": "Enter a name.",
+  "profile_embedded": "Embedded holiday",
+  "profile_embedded_kept": "The embedded holiday profile cannot be deleted.",
+  "profile_embedded_catalog": "The Vietnam catalog is the embedded holiday profile.",
+  "ical_section": "iCal calendars",
+  "ical_add": "Add iCal calendar",
+  "ical_url": "iCal URL",
+  "ical_hint": "Paste an .ics link, for example https://www.officeholidays.com/ics-all/vietnam",
+  "ical_url_required": "Enter an iCal URL.",
+  "ical_fetching": "Loading calendar…"
 }

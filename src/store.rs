@@ -6,6 +6,11 @@ use crate::event::{
     EventId,
     EventStore,
 };
+use crate::ical::{
+    IcalCalendar,
+    IcalFeed,
+    parse_ics,
+};
 use crate::profile::{
     Profile,
     ProfileId,
@@ -208,7 +213,7 @@ pub async fn event_by_id(pool: &SqlitePool, id: i64) -> anyhow::Result<Option<Ev
 
 pub async fn load_profiles(pool: &SqlitePool) -> anyhow::Result<Vec<Profile>> {
     let rows = sqlx::query!(
-        r#"SELECT id as "id!", name as "name!", enabled as "enabled!", catalog as "catalog!", sort as "sort!" FROM profiles ORDER BY sort, name"#
+        r#"SELECT id as "id!", name as "name!", enabled as "enabled!", catalog as "catalog!", sort as "sort!", embedded as "embedded!" FROM profiles ORDER BY sort, name"#
     )
     .fetch_all(pool)
     .await?;
@@ -220,6 +225,7 @@ pub async fn load_profiles(pool: &SqlitePool) -> anyhow::Result<Vec<Profile>> {
             enabled: row.enabled != 0,
             catalog: row.catalog,
             sort: row.sort,
+            embedded: row.embedded != 0,
         });
     }
     Ok(out)
@@ -227,36 +233,113 @@ pub async fn load_profiles(pool: &SqlitePool) -> anyhow::Result<Vec<Profile>> {
 
 pub async fn upsert_profile(pool: &SqlitePool, profile: &Profile) -> anyhow::Result<ProfileId> {
     let enabled = if profile.enabled { 1i64 } else { 0 };
+    let embedded = if profile.embedded { 1i64 } else { 0 };
     let id = if profile.id.is_nil() {
         sqlx::query_scalar!(
-            r#"INSERT INTO profiles (name, enabled, catalog, sort) VALUES (?, ?, ?, ?) RETURNING id as "id!: i64""#,
+            r#"INSERT INTO profiles (name, enabled, catalog, sort, embedded) VALUES (?, ?, ?, ?, ?) RETURNING id as "id!: i64""#,
             profile.name,
             enabled,
             profile.catalog,
-            profile.sort
+            profile.sort,
+            embedded
         ).fetch_one(pool).await?
     } else {
         let id = profile.id.0;
         sqlx::query!(
-            "INSERT INTO profiles (id, name, enabled, catalog, sort) VALUES (?, ?, ?, ?, ?)
-             ON CONFLICT(id) DO UPDATE SET name = excluded.name, enabled = excluded.enabled, catalog = excluded.catalog, sort = excluded.sort",
+            "INSERT INTO profiles (id, name, enabled, catalog, sort, embedded) VALUES (?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET name = excluded.name, enabled = excluded.enabled, catalog = excluded.catalog, sort = excluded.sort, embedded = excluded.embedded",
             id,
             profile.name,
             enabled,
             profile.catalog,
-            profile.sort
+            profile.sort,
+            embedded
         ).execute(pool).await?;
         id
     };
     Ok(ProfileId(id))
 }
 
+pub async fn is_embedded_profile(pool: &SqlitePool, id: i64) -> anyhow::Result<bool> {
+    let embedded = sqlx::query_scalar!(
+        r#"SELECT embedded as "embedded!" FROM profiles WHERE id = ?"#,
+        id
+    )
+    .fetch_optional(pool)
+    .await?;
+    Ok(embedded.is_some_and(|value| value != 0))
+}
+
 pub async fn delete_profile(pool: &SqlitePool, id: i64) -> anyhow::Result<()> {
+    if is_embedded_profile(pool, id).await? {
+        anyhow::bail!("embedded profile cannot be deleted");
+    }
     sqlx::query!("DELETE FROM profiles WHERE id = ?", id)
         .execute(pool)
         .await?;
     Ok(())
 }
+
+pub async fn load_ical_feeds(pool: &SqlitePool) -> anyhow::Result<Vec<IcalFeed>> {
+    let rows = sqlx::query!(
+        r#"SELECT id as "id!", url as "url!", name as "name!", enabled as "enabled!", body as "body!", fetched_at as "fetched_at!" FROM ical_feeds ORDER BY name, id"#
+    )
+    .fetch_all(pool)
+    .await?;
+    let mut out = Vec::new();
+    for row in rows {
+        let parsed = parse_ics(&row.body).unwrap_or(IcalCalendar {
+            name: row.name.clone(),
+            events: Vec::new(),
+        });
+        out.push(IcalFeed {
+            id: row.id,
+            url: row.url,
+            name: row.name,
+            enabled: row.enabled != 0,
+            fetched_at: row.fetched_at,
+            events: parsed.events,
+        });
+    }
+    Ok(out)
+}
+
+pub async fn insert_ical_feed(pool: &SqlitePool, url: &str, name: &str, body: &str, fetched_at: i64) -> anyhow::Result<i64> {
+    let id = sqlx::query_scalar!(
+        r#"INSERT INTO ical_feeds (url, name, enabled, body, fetched_at) VALUES (?, ?, 1, ?, ?) RETURNING id as "id!: i64""#,
+        url,
+        name,
+        body,
+        fetched_at
+    )
+    .fetch_one(pool)
+    .await?;
+    Ok(id)
+}
+
+pub async fn update_ical_body(pool: &SqlitePool, id: i64, body: &str, fetched_at: i64) -> anyhow::Result<()> {
+    sqlx::query!("UPDATE ical_feeds SET body = ?, fetched_at = ? WHERE id = ?", body, fetched_at, id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn set_ical_enabled(pool: &SqlitePool, id: i64, enabled: bool) -> anyhow::Result<()> {
+    let enabled = if enabled { 1i64 } else { 0 };
+    sqlx::query!("UPDATE ical_feeds SET enabled = ? WHERE id = ?", enabled, id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn delete_ical_feed(pool: &SqlitePool, id: i64) -> anyhow::Result<()> {
+    sqlx::query!("DELETE FROM ical_feeds WHERE id = ?", id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub const ICAL_REFRESH_SECS: i64 = 48 * 60 * 60;
 
 pub async fn tombstone_profile_events(pool: &SqlitePool, profile_id: i64) -> anyhow::Result<Vec<(i64, i64)>> {
     let rows = sqlx::query!(
@@ -276,21 +359,56 @@ pub async fn tombstone_profile_events(pool: &SqlitePool, profile_id: i64) -> any
 
 pub async fn ensure_default_profile(pool: &SqlitePool, name: &str) -> anyhow::Result<Profile> {
     let existing = load_profiles(pool).await?;
-    if let Some(first) = existing.into_iter().next() {
-        return Ok(first);
+    if let Some(first) = existing.iter().find(|profile| !profile.embedded) {
+        return Ok(first.clone());
     }
+    let sort = existing.iter().map(|profile| profile.sort).max().unwrap_or(-1) + 1;
     let mut profile = Profile {
         id: ProfileId::default(),
         name: name.to_string(),
         enabled: true,
-        catalog: "vn".into(),
-        sort: 0,
+        catalog: String::new(),
+        sort,
+        embedded: false,
     };
     profile.id = upsert_profile(pool, &profile).await?;
     let id = profile.id.0;
     sqlx::query!("UPDATE events SET profile_id = ? WHERE profile_id = 0", id)
         .execute(pool)
         .await?;
+    Ok(profile)
+}
+
+/// The shipped `assets/catalog` set. Created once, then only renamed for the UI language.
+/// A profile that already pointed at that slug gives it up so the days are not listed twice.
+pub async fn ensure_embedded_profile(pool: &SqlitePool, name: &str) -> anyhow::Result<Profile> {
+    let existing = load_profiles(pool).await?;
+    if let Some(found) = existing.iter().find(|profile| profile.embedded) {
+        if found.name == name {
+            return Ok(found.clone());
+        }
+        let mut renamed = found.clone();
+        renamed.name = name.to_string();
+        upsert_profile(pool, &renamed).await?;
+        return Ok(renamed);
+    }
+    for profile in &existing {
+        if profile.catalog_slug() == Some(crate::profile::EMBEDDED_CATALOG) {
+            let mut cleared = profile.clone();
+            cleared.catalog.clear();
+            upsert_profile(pool, &cleared).await?;
+        }
+    }
+    let sort = existing.iter().map(|profile| profile.sort).min().unwrap_or(0) - 1;
+    let mut profile = Profile {
+        id: ProfileId::default(),
+        name: name.to_string(),
+        enabled: true,
+        catalog: crate::profile::EMBEDDED_CATALOG.into(),
+        sort,
+        embedded: true,
+    };
+    profile.id = upsert_profile(pool, &profile).await?;
     Ok(profile)
 }
 
@@ -352,6 +470,38 @@ mod tests {
         assert!(deleted.deleted);
         assert_eq!(deleted.sync_key, original_sync_key);
         assert_eq!(deleted.sync_id, Some(31));
+    }
+
+    #[tokio::test]
+    async fn assets_catalog_becomes_an_embedded_profile() {
+        let pool = memory_pool().await;
+        sqlx::migrate!("db/migrations/sqlite").run(&pool).await.unwrap();
+        let mut personal = Profile {
+            id: ProfileId::default(),
+            name: "Cá nhân".into(),
+            enabled: true,
+            catalog: "vn".into(),
+            sort: 0,
+            embedded: false,
+        };
+        personal.id = upsert_profile(&pool, &personal).await.unwrap();
+        let embedded = ensure_embedded_profile(&pool, "Ngày lễ tích hợp").await.unwrap();
+        assert!(embedded.embedded);
+        assert_eq!(embedded.catalog, "vn");
+        assert!(embedded.sort < personal.sort);
+        let profiles = load_profiles(&pool).await.unwrap();
+        let kept = profiles.iter().find(|profile| profile.id == personal.id).unwrap();
+        assert!(kept.catalog.is_empty());
+        assert!(!kept.embedded);
+        assert_eq!(profiles.iter().filter(|profile| profile.embedded).count(), 1);
+        let renamed = ensure_embedded_profile(&pool, "Embedded holiday").await.unwrap();
+        assert_eq!(renamed.id, embedded.id);
+        assert_eq!(renamed.name, "Embedded holiday");
+        assert!(delete_profile(&pool, embedded.id.0).await.is_err());
+        assert!(is_embedded_profile(&pool, embedded.id.0).await.unwrap());
+        let ordinary = ensure_default_profile(&pool, "Personal").await.unwrap();
+        assert_eq!(ordinary.id, personal.id);
+        assert!(!ordinary.embedded);
     }
 
     #[tokio::test]

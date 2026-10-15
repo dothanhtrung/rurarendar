@@ -55,8 +55,10 @@ export struct AgendaRow {
     header: bool,
     title: string,
     time: string,
+    // Empty for a built-in holiday or festival: it can be opened, not edited or deleted.
     id: string,
     enabled: bool,
+    holiday: bool,
     year: int,
     month: int,
     day: int,
@@ -68,6 +70,8 @@ export struct ProfileRow {
     name: string,
     enabled: bool,
     active: bool,
+    // Shipped assets catalog. It can be hidden, not deleted.
+    embedded: bool,
 }
 
 struct Swatch {

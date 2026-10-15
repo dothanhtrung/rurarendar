@@ -1,5 +1,5 @@
 import { Palette } from "theme-default.slint";
-import { Chrome, Calendar, Profiles } from "demo-data.slint";
+import { Chrome, Calendar, Profiles, Feeds } from "demo-data.slint";
 import { I18n } from "i18n.slint";
 import { Field, InkButton, IconButton, CheckRow, SelectField, EventRow } from "widgets.slint";
 
@@ -466,6 +466,68 @@ export component ProfileSheet inherits Rectangle {
                     label: I18n.save;
                     clicked => {
                         Profiles.save-sheet();
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component IcalSheet inherits Rectangle {
+    background: Palette.overlay;
+    TouchArea {
+        clicked => {
+            Feeds.sheet-open = false;
+        }
+    }
+    Rectangle {
+        width: 420px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        height: box.preferred-height;
+        border-radius: 12px;
+        background: Palette.bg-surface;
+        drop-shadow-blur: 32px;
+        drop-shadow-color: Palette.shadow;
+        TouchArea { }
+        box := VerticalLayout {
+            padding: 24px;
+            spacing: 12px;
+            Text {
+                text: I18n.ical-add;
+                font-family: Palette.font-display;
+                font-size: 1.2rem;
+                font-weight: 600;
+                color: Palette.text-primary;
+            }
+            Field { label: I18n.ical-url; text <=> Feeds.sheet-url; }
+            Field { label: I18n.profile-name; text <=> Feeds.sheet-name; }
+            Text {
+                text: I18n.ical-hint;
+                color: Palette.text-muted;
+                font-size: 0.8rem;
+                wrap: word-wrap;
+            }
+            if (Feeds.sheet-error != ""): Text {
+                text: Feeds.sheet-error;
+                color: Palette.text-holiday;
+                font-size: 0.85rem;
+                wrap: word-wrap;
+            }
+            HorizontalLayout {
+                alignment: end;
+                spacing: 8px;
+                InkButton {
+                    label: I18n.cancel;
+                    quiet: true;
+                    clicked => {
+                        Feeds.sheet-open = false;
+                    }
+                }
+                InkButton {
+                    label: I18n.save;
+                    clicked => {
+                        Feeds.save();
                     }
                 }
             }

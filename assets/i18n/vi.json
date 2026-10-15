@@ -143,5 +143,14 @@
   "profile_path": "Thư mục catalog",
   "profile_path_hint": "Thư mục chứa {profile}-{year}.csv (ví dụ vn-2026.csv) hoặc YYYY.csv. Để trống nếu không có ngày lễ.",
   "profile_one_required": "Giữ ít nhất một hồ sơ.",
-  "profile_name_required": "Nhập tên."
+  "profile_name_required": "Nhập tên.",
+  "profile_embedded": "Ngày lễ tích hợp",
+  "profile_embedded_kept": "Không xóa được ngày lễ tích hợp.",
+  "profile_embedded_catalog": "Catalog Việt Nam đã là ngày lễ tích hợp.",
+  "ical_section": "Lịch iCal",
+  "ical_add": "Thêm lịch iCal",
+  "ical_url": "Địa chỉ iCal",
+  "ical_hint": "Dán liên kết .ics, ví dụ https://www.officeholidays.com/ics-all/vietnam",
+  "ical_url_required": "Nhập địa chỉ iCal.",
+  "ical_fetching": "Đang tải lịch…"
 }

@@ -33,6 +33,7 @@ use crate::ui::{
     Calendar,
     Chrome,
     I18n,
+    Feeds,
     Profiles,
     Sync,
     Theme,
@@ -169,7 +170,10 @@ pub fn wire(
             if let Ok(date) = CivilDate::from_ymd_in_range(year, month as u8, day as u8) {
                 state.selected = date;
             }
-            let _ = open_existing_event(&ui, &mut state, id.as_str());
+            // A built-in holiday or festival has no stored event. Opening the day is enough.
+            if !id.is_empty() {
+                let _ = open_existing_event(&ui, &mut state, id.as_str());
+            }
             refresh(&ui, &mut state);
         });
     }
@@ -184,6 +188,13 @@ pub fn wire(
             let mut state = state.borrow_mut();
             state.locale_pref = pref;
             i18n::apply(&ui, pref, &Bundle::load(pref.resolve()));
+            let embedded_name = ui.global::<I18n>().get_profile_embedded().to_string();
+            if let Some(profile) = state.profiles.iter_mut().find(|profile| profile.embedded) {
+                if profile.name != embedded_name {
+                    profile.name = embedded_name;
+                    let _ = sync_tx.send(SyncCmd::UpsertProfile(profile.clone()));
+                }
+            }
             set_scope_options(&ui);
             refresh(&ui, &mut state);
         });
@@ -330,18 +341,28 @@ pub fn wire(
         ui.global::<Profiles>().on_delete(move |id| {
             let ui = ui_weak.unwrap();
             let mut state = state.borrow_mut();
-            if state.profiles.len() < 2 {
-                ui.global::<Profiles>()
-                    .set_sheet_error(ui.global::<I18n>().get_profile_one_required());
-                return;
-            }
             let Some(pid) = crate::profile::ProfileId::parse(id.as_str()) else {
                 return;
             };
+            if !crate::profile::can_delete_profile(&state.profiles, pid) {
+                let message = if state.profiles.iter().any(|profile| profile.id == pid && profile.embedded) {
+                    ui.global::<I18n>().get_profile_embedded_kept()
+                } else {
+                    ui.global::<I18n>().get_profile_one_required()
+                };
+                ui.global::<Profiles>().set_sheet_error(message);
+                return;
+            }
             state.profiles.retain(|profile| profile.id != pid);
             state.events.remove_profile(pid);
             if state.active_profile == pid {
-                if let Some(next_id) = state.profiles.first().map(|profile| profile.id) {
+                if let Some(next_id) = state
+                    .profiles
+                    .iter()
+                    .find(|profile| !profile.embedded)
+                    .or_else(|| state.profiles.first())
+                    .map(|profile| profile.id)
+                {
                     state.active_profile = next_id;
                     let _ = sync_tx.send(SyncCmd::SetActiveProfile(next_id));
                 }
@@ -400,6 +421,10 @@ pub fn wire(
             let src = std::path::Path::new(path.trim());
             let catalog = if import || !path.trim().is_empty() {
                 let slug = crate::profile::detect_catalog_slug(src, &name);
+                if slug == crate::profile::EMBEDDED_CATALOG {
+                    p.set_sheet_error(ui.global::<I18n>().get_profile_embedded_catalog());
+                    return;
+                }
                 let dest = state.catalogs_dir.clone();
                 if let Err(err) = crate::profile::import_catalog_dir(src, &dest, &slug) {
                     p.set_sheet_error(SharedString::from(err));
@@ -416,12 +441,76 @@ pub fn wire(
                 enabled: true,
                 catalog,
                 sort,
+                embedded: false,
             };
             state.profiles.push(profile.clone());
             state.active_profile = id;
             let _ = state.reload_catalogs();
             let _ = sync_tx.send(SyncCmd::UpsertProfile(profile));
             ui.global::<Chrome>().set_profile_sheet_open(false);
+            refresh(&ui, &mut state);
+        });
+    }
+    {
+        let ui_weak = ui.as_weak();
+        ui.global::<Feeds>().on_open_add(move || {
+            let ui = ui_weak.unwrap();
+            let feeds = ui.global::<Feeds>();
+            feeds.set_sheet_url(SharedString::new());
+            feeds.set_sheet_name(SharedString::new());
+            feeds.set_sheet_error(SharedString::new());
+            feeds.set_sheet_open(true);
+        });
+    }
+    {
+        let ui_weak = ui.as_weak();
+        let sync_tx = sync_tx.clone();
+        ui.global::<Feeds>().on_save(move || {
+            let ui = ui_weak.unwrap();
+            let feeds = ui.global::<Feeds>();
+            let url = feeds.get_sheet_url().trim().to_string();
+            if url.is_empty() {
+                feeds.set_sheet_error(ui.global::<I18n>().get_ical_url_required());
+                return;
+            }
+            feeds.set_sheet_error(ui.global::<I18n>().get_ical_fetching());
+            let _ = sync_tx.send(SyncCmd::AddIcal {
+                url,
+                name: feeds.get_sheet_name().to_string(),
+            });
+        });
+    }
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        let sync_tx = sync_tx.clone();
+        ui.global::<Feeds>().on_toggle(move |id| {
+            let ui = ui_weak.unwrap();
+            let Ok(id) = id.as_str().parse::<i64>() else {
+                return;
+            };
+            let mut state = state.borrow_mut();
+            let Some(feed) = state.feeds.iter_mut().find(|feed| feed.id == id) else {
+                return;
+            };
+            feed.enabled = !feed.enabled;
+            let enabled = feed.enabled;
+            let _ = sync_tx.send(SyncCmd::SetIcalEnabled { id, enabled });
+            refresh(&ui, &mut state);
+        });
+    }
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        let sync_tx = sync_tx.clone();
+        ui.global::<Feeds>().on_delete(move |id| {
+            let ui = ui_weak.unwrap();
+            let Ok(id) = id.as_str().parse::<i64>() else {
+                return;
+            };
+            let mut state = state.borrow_mut();
+            state.feeds.retain(|feed| feed.id != id);
+            let _ = sync_tx.send(SyncCmd::DeleteIcal(id));
             refresh(&ui, &mut state);
         });
     }
@@ -573,6 +662,19 @@ fn apply_sync_event(ui: &AppWindow, state: &Rc<RefCell<AppState>>, ev: SyncEvent
         SyncEvent::Conflict { title, .. } => {
             ui.global::<Sync>()
                 .set_error(SharedString::from(format!("Xung đột: {title}")));
+        }
+        SyncEvent::IcalFeeds { feeds, close_sheet } => {
+            let mut state = state.borrow_mut();
+            state.feeds = feeds;
+            refresh(ui, &mut state);
+            if close_sheet {
+                let feeds = ui.global::<Feeds>();
+                feeds.set_sheet_error(SharedString::new());
+                feeds.set_sheet_open(false);
+            }
+        }
+        SyncEvent::IcalError(msg) => {
+            ui.global::<Feeds>().set_sheet_error(SharedString::from(msg));
         }
     }
 }

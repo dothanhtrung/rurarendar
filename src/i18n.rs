@@ -220,6 +220,15 @@ pub struct Bundle {
     pub profile_path_hint: String,
     pub profile_one_required: String,
     pub profile_name_required: String,
+    pub profile_embedded: String,
+    pub profile_embedded_kept: String,
+    pub profile_embedded_catalog: String,
+    pub ical_section: String,
+    pub ical_add: String,
+    pub ical_url: String,
+    pub ical_hint: String,
+    pub ical_url_required: String,
+    pub ical_fetching: String,
 }
 
 impl Bundle {
@@ -362,6 +371,15 @@ pub fn apply(ui: &AppWindow, pref: LocalePref, bundle: &Bundle) {
     g.set_profile_path_hint(s(&bundle.profile_path_hint));
     g.set_profile_one_required(s(&bundle.profile_one_required));
     g.set_profile_name_required(s(&bundle.profile_name_required));
+    g.set_profile_embedded(s(&bundle.profile_embedded));
+    g.set_profile_embedded_kept(s(&bundle.profile_embedded_kept));
+    g.set_profile_embedded_catalog(s(&bundle.profile_embedded_catalog));
+    g.set_ical_section(s(&bundle.ical_section));
+    g.set_ical_add(s(&bundle.ical_add));
+    g.set_ical_url(s(&bundle.ical_url));
+    g.set_ical_hint(s(&bundle.ical_hint));
+    g.set_ical_url_required(s(&bundle.ical_url_required));
+    g.set_ical_fetching(s(&bundle.ical_fetching));
 
     let cal = ui.global::<Calendar>();
     cal.set_event_recurrence_options(ModelRc::new(VecModel::from(vec![

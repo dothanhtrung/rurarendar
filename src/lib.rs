@@ -3,6 +3,7 @@ pub mod codec;
 pub mod crypto;
 pub mod event;
 pub mod i18n;
+pub mod ical;
 pub mod profile;
 pub mod store;
 pub mod sync;
@@ -146,9 +147,12 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 
     let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
     let pool = runtime.block_on(store::open_pool(&config.db))?;
-    let default_name = i18n::Bundle::load(locale_pref.resolve()).profile_default;
+    let bundle = i18n::Bundle::load(locale_pref.resolve());
+    let default_name = bundle.profile_default;
+    let embedded_name = bundle.profile_embedded;
     let (profiles, default_profile) = runtime.block_on(async {
         let default_profile = store::ensure_default_profile(&pool, &default_name).await?;
+        store::ensure_embedded_profile(&pool, &embedded_name).await?;
         let profiles = store::load_profiles(&pool).await?;
         anyhow::Ok((profiles, default_profile))
     })?;
@@ -157,13 +161,21 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         if profiles.iter().any(|profile| profile.id == active) {
             active
         } else {
-            default_profile.id
+            profiles
+                .iter()
+                .find(|profile| !profile.embedded)
+                .map(|profile| profile.id)
+                .unwrap_or(default_profile.id)
         }
     };
     if config.active_profile != active_profile.0 {
         config.active_profile = active_profile.0;
         config.save(&config_path)?;
     }
+    let feeds = runtime.block_on(store::load_ical_feeds(&pool)).unwrap_or_else(|err| {
+        tracing::warn!("ical load: {err}");
+        Vec::new()
+    });
     let (sync_tx, sync_rx) = sync::start(pool, config, config_path);
 
     let mut app_state = AppState {
@@ -173,6 +185,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         selected: today,
         today,
         events: EventStore::default(),
+        feeds,
         locale_pref,
         profiles,
         active_profile,

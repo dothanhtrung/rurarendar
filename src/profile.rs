@@ -34,6 +34,22 @@ pub struct Profile {
     /// Catalog slug in `{slug}-{year}.csv` (e.g. `vn`). Empty: no catalog.
     pub catalog: String,
     pub sort: i64,
+    /// Bundled assets catalog. The user may hide it, not delete it.
+    pub embedded: bool,
+}
+
+/// Slug of the holiday catalog shipped in `assets/catalog`.
+pub const EMBEDDED_CATALOG: &str = "vn";
+
+/// The embedded holiday profile stays. The last ordinary profile stays too.
+pub fn can_delete_profile(profiles: &[Profile], id: ProfileId) -> bool {
+    let Some(profile) = profiles.iter().find(|profile| profile.id == id) else {
+        return false;
+    };
+    if profile.embedded {
+        return false;
+    }
+    profiles.iter().any(|other| !other.embedded && other.id != id)
 }
 
 impl Profile {
@@ -112,5 +128,40 @@ mod tests {
     fn slug_from_name() {
         assert_eq!(catalog_slug("Japanese Holiday"), "japanese-holiday");
         assert_eq!(catalog_slug("vn"), "vn");
+    }
+
+    #[test]
+    fn embedded_holiday_profile_cannot_be_deleted() {
+        let personal = Profile {
+            id: ProfileId(1),
+            name: "Personal".into(),
+            enabled: true,
+            catalog: String::new(),
+            sort: 0,
+            embedded: false,
+        };
+        let embedded = Profile {
+            id: ProfileId(2),
+            name: "Embedded holiday".into(),
+            enabled: true,
+            catalog: EMBEDDED_CATALOG.into(),
+            sort: -1,
+            embedded: true,
+        };
+        let profiles = vec![personal.clone(), embedded.clone()];
+        assert!(!can_delete_profile(&profiles, embedded.id));
+        assert!(!can_delete_profile(&profiles, personal.id));
+        let mut with_work = profiles;
+        with_work.push(Profile {
+            id: ProfileId(3),
+            name: "Work".into(),
+            enabled: true,
+            catalog: String::new(),
+            sort: 1,
+            embedded: false,
+        });
+        assert!(can_delete_profile(&with_work, personal.id));
+        assert!(can_delete_profile(&with_work, ProfileId(3)));
+        assert!(!can_delete_profile(&with_work, embedded.id));
     }
 }

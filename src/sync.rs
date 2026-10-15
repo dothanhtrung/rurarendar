@@ -44,6 +44,9 @@ pub enum SyncCmd {
     UpsertProfile(crate::profile::Profile),
     DeleteProfile(crate::profile::ProfileId),
     SetActiveProfile(crate::profile::ProfileId),
+    AddIcal { url: String, name: String },
+    SetIcalEnabled { id: i64, enabled: bool },
+    DeleteIcal(i64),
 }
 
 #[derive(Debug)]
@@ -59,6 +62,8 @@ pub enum SyncEvent {
     },
     ProfileSaved(crate::profile::Profile),
     Events(EventStore),
+    IcalFeeds { feeds: Vec<crate::ical::IcalFeed>, close_sheet: bool },
+    IcalError(String),
     Conflict { title: String, item_id: String },
 }
 
@@ -98,6 +103,12 @@ async fn worker(
 ) {
     if let Ok(store) = store::load_events(&pool).await {
         let _ = events.send(SyncEvent::Events(store));
+    }
+    match refresh_stale_ical(&pool).await {
+        Ok(feeds) => {
+            let _ = events.send(SyncEvent::IcalFeeds { feeds, close_sheet: false });
+        }
+        Err(err) => tracing::warn!("ical refresh: {err}"),
     }
     let mut session = restore_session(&mut config, &config_path);
     let _ = events.send(ready_event(&config, session.is_some()));
@@ -197,6 +208,14 @@ async fn worker(
                 }
             }
             SyncCmd::DeleteProfile(id) => {
+                match store::is_embedded_profile(&pool, id.0).await {
+                    Ok(true) => continue,
+                    Ok(false) => {}
+                    Err(e) => {
+                        let _ = events.send(SyncEvent::Error(e.to_string()));
+                        continue;
+                    }
+                }
                 if let Err(e) = store::tombstone_profile_events(&pool, id.0).await {
                     let _ = events.send(SyncEvent::Error(e.to_string()));
                     continue;
@@ -249,6 +268,37 @@ async fn worker(
                     let _ = events.send(SyncEvent::Error(format!("Đã xóa cục bộ. Đẩy lên server lỗi: {e}")));
                 }
             }
+            SyncCmd::AddIcal { url, name } => match add_ical(&pool, &url, &name).await {
+                Ok(()) => match store::load_ical_feeds(&pool).await {
+                    Ok(feeds) => {
+                        let _ = events.send(SyncEvent::IcalFeeds { feeds, close_sheet: true });
+                    }
+                    Err(err) => {
+                        let _ = events.send(SyncEvent::IcalError(err.to_string()));
+                    }
+                },
+                Err(err) => {
+                    let _ = events.send(SyncEvent::IcalError(err));
+                }
+            },
+            SyncCmd::SetIcalEnabled { id, enabled } => {
+                if let Err(err) = store::set_ical_enabled(&pool, id, enabled).await {
+                    let _ = events.send(SyncEvent::IcalError(err.to_string()));
+                    continue;
+                }
+                if let Ok(feeds) = store::load_ical_feeds(&pool).await {
+                    let _ = events.send(SyncEvent::IcalFeeds { feeds, close_sheet: false });
+                }
+            }
+            SyncCmd::DeleteIcal(id) => {
+                if let Err(err) = store::delete_ical_feed(&pool, id).await {
+                    let _ = events.send(SyncEvent::IcalError(err.to_string()));
+                    continue;
+                }
+                if let Ok(feeds) = store::load_ical_feeds(&pool).await {
+                    let _ = events.send(SyncEvent::IcalFeeds { feeds, close_sheet: false });
+                }
+            }
             SyncCmd::PushPull => {
                 let Some(sess) = session.as_mut() else {
                     let _ = events.send(SyncEvent::Error("Chưa có username/token.".into()));
@@ -272,6 +322,44 @@ async fn worker(
             }
         }
     }
+}
+
+async fn add_ical(pool: &SqlitePool, url: &str, name: &str) -> Result<(), String> {
+    let url = crate::ical::normalize_url(url)?;
+    let body = crate::ical::fetch_ics(&url).await?;
+    let parsed = crate::ical::parse_ics(&body)?;
+    let name = name.trim();
+    let name = if name.is_empty() { parsed.name } else { name.to_string() };
+    let name = if name.is_empty() { url.clone() } else { name };
+    let fetched_at = chrono::Utc::now().timestamp();
+    store::insert_ical_feed(pool, &url, &name, &body, fetched_at).await.map_err(|err| {
+        if err.to_string().contains("UNIQUE") {
+            "Lịch này đã được thêm.".to_string()
+        } else {
+            err.to_string()
+        }
+    })?;
+    Ok(())
+}
+
+async fn refresh_stale_ical(pool: &SqlitePool) -> Result<Vec<crate::ical::IcalFeed>, String> {
+    let feeds = store::load_ical_feeds(pool).await.map_err(|err| err.to_string())?;
+    let now = chrono::Utc::now().timestamp();
+    for feed in &feeds {
+        if !feed.enabled || now.saturating_sub(feed.fetched_at) < store::ICAL_REFRESH_SECS {
+            continue;
+        }
+        match crate::ical::fetch_ics(&feed.url).await {
+            Ok(body) if body.to_ascii_uppercase().contains("BEGIN:VCALENDAR") => {
+                if let Err(err) = store::update_ical_body(pool, feed.id, &body, now).await {
+                    tracing::warn!("ical update {}: {err}", feed.url);
+                }
+            }
+            Ok(_) => tracing::warn!("ical refresh ignored a non-calendar body for {}", feed.url),
+            Err(err) => tracing::warn!("ical refresh {}: {err}", feed.url),
+        }
+    }
+    store::load_ical_feeds(pool).await.map_err(|err| err.to_string())
 }
 
 fn ready_event(config: &Config, connected: bool) -> SyncEvent {

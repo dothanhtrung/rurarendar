@@ -1,5 +1,5 @@
 import { Palette, AppPage } from "theme-default.slint";
-import { Chrome, Profiles } from "demo-data.slint";
+import { Chrome, Profiles, Feeds } from "demo-data.slint";
 import { I18n } from "i18n.slint";
 import { NavItem, ProfileNavRow } from "widgets.slint";
 
@@ -113,7 +113,7 @@ export component Sidebar inherits Rectangle {
                 spacing: 2px;
                 for p[idx] in Profiles.items: ProfileNavRow {
                     data: p;
-                    can-delete: Profiles.items.length > 1;
+                    can-delete: !p.embedded && Profiles.normal-count > 1;
                     toggled => {
                         Profiles.toggle(Profiles.items[idx].id);
                     }
@@ -147,6 +147,44 @@ export component Sidebar inherits Rectangle {
                 text: I18n.profile-import;
                 color: Palette.text-on-sidebar-muted;
                 font-size: 0.8rem;
+            }
+        }
+
+        Text {
+            text: I18n.ical-section;
+            color: Palette.text-on-sidebar-muted;
+            font-size: 0.7rem;
+            font-weight: 700;
+        }
+        Flickable {
+            height: min(feeds.preferred-height, 160px);
+            content-height: max(feeds.preferred-height, 1px);
+            content-width: self.width;
+            feeds := VerticalLayout {
+                width: parent.width;
+                spacing: 2px;
+                for feed[idx] in Feeds.items: ProfileNavRow {
+                    data: feed;
+                    can-delete: true;
+                    toggled => {
+                        Feeds.toggle(Feeds.items[idx].id);
+                    }
+                    deleted => {
+                        Feeds.delete(Feeds.items[idx].id);
+                    }
+                }
+            }
+        }
+        TouchArea {
+            mouse-cursor: pointer;
+            clicked => {
+                Feeds.open-add();
+            }
+            Text {
+                text: I18n.ical-add;
+                color: Palette.text-on-sidebar;
+                font-size: 0.8rem;
+                font-weight: 600;
             }
         }
 

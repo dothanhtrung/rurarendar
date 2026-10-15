@@ -7,6 +7,7 @@ use crate::calendar::{
     UiLang,
 };
 use crate::event::EventStore;
+use crate::ical::IcalFeed;
 use std::path::PathBuf;
 
 use crate::i18n::LocalePref;
@@ -22,6 +23,7 @@ pub struct AppState {
     pub selected: CivilDate,
     pub today: CivilDate,
     pub events: EventStore,
+    pub feeds: Vec<IcalFeed>,
     pub locale_pref: LocalePref,
     pub profiles: Vec<Profile>,
     pub active_profile: ProfileId,
