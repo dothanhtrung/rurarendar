@@ -95,6 +95,8 @@ pub struct Bundle {
     pub nav_day: String,
     pub nav_week: String,
     pub nav_month: String,
+    pub nav_event_list: String,
+    pub nav_reminder_list: String,
     pub nav_settings: String,
     pub nav_about: String,
     pub hide_sidebar: String,
@@ -168,6 +170,8 @@ pub struct Bundle {
     pub legend_event: String,
     pub add_event: String,
     pub empty_day: String,
+    pub empty_event_list: String,
+    pub empty_reminder_list: String,
     pub day_popup_empty: String,
     pub row_delete: String,
     pub apply_to: String,
@@ -250,6 +254,8 @@ pub fn apply(ui: &AppWindow, pref: LocalePref, bundle: &Bundle) {
     g.set_nav_day(s(&bundle.nav_day));
     g.set_nav_week(s(&bundle.nav_week));
     g.set_nav_month(s(&bundle.nav_month));
+    g.set_nav_event_list(s(&bundle.nav_event_list));
+    g.set_nav_reminder_list(s(&bundle.nav_reminder_list));
     g.set_nav_settings(s(&bundle.nav_settings));
     g.set_nav_about(s(&bundle.nav_about));
     g.set_hide_sidebar(s(&bundle.hide_sidebar));
@@ -323,6 +329,8 @@ pub fn apply(ui: &AppWindow, pref: LocalePref, bundle: &Bundle) {
     g.set_legend_event(s(&bundle.legend_event));
     g.set_add_event(s(&bundle.add_event));
     g.set_empty_day(s(&bundle.empty_day));
+    g.set_empty_event_list(s(&bundle.empty_event_list));
+    g.set_empty_reminder_list(s(&bundle.empty_reminder_list));
     g.set_day_popup_empty(s(&bundle.day_popup_empty));
     g.set_row_delete(s(&bundle.row_delete));
     g.set_apply_to(s(&bundle.apply_to));

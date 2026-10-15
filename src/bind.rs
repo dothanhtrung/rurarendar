@@ -163,6 +163,19 @@ pub fn wire(
     {
         let ui_weak = ui.as_weak();
         let state = state.clone();
+        ui.global::<Calendar>().on_open_listed_event(move |id, year, month, day| {
+            let ui = ui_weak.unwrap();
+            let mut state = state.borrow_mut();
+            if let Ok(date) = CivilDate::from_ymd_in_range(year, month as u8, day as u8) {
+                state.selected = date;
+            }
+            let _ = open_existing_event(&ui, &mut state, id.as_str());
+            refresh(&ui, &mut state);
+        });
+    }
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
         let sync_tx = sync_tx.clone();
         ui.global::<I18n>().on_language_changed(move |index| {
             let ui = ui_weak.unwrap();
@@ -253,7 +266,12 @@ pub fn wire(
                     let _ = sync_tx.send(SyncCmd::Delete(event));
                     refresh(&ui, &mut state);
                 }
-                Err(msg) => ui.global::<Calendar>().set_day_list_status(SharedString::from(msg)),
+                Err(msg) => {
+                    let text = SharedString::from(msg);
+                    let cal = ui.global::<Calendar>();
+                    cal.set_day_list_status(text.clone());
+                    cal.set_agenda_status(text);
+                }
             }
         });
     }

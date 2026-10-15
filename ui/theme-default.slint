@@ -4,7 +4,7 @@
 
 import { Palette as WidgetPalette } from "std-widgets.slint";
 
-export enum AppPage { day, week, month, settings, about }
+export enum AppPage { day, week, month, events, settings, about }
 
 export struct DayCellData {
     gregorian: int,
@@ -48,6 +48,19 @@ export struct DayEvent {
     // Empty for holidays and other rows that cannot be edited.
     id: string,
     enabled: bool,
+}
+
+// One agenda line. A header is the civil date; an event row is one upcoming occurrence.
+export struct AgendaRow {
+    header: bool,
+    title: string,
+    time: string,
+    id: string,
+    enabled: bool,
+    year: int,
+    month: int,
+    day: int,
+    today: bool,
 }
 
 export struct ProfileRow {

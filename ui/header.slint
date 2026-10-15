@@ -106,6 +106,21 @@ export component Header inherits Rectangle {
             }
         }
 
+        if (Chrome.page == AppPage.events): Rectangle {
+            horizontal-stretch: Chrome.phone ? 1 : 0;
+            min-width: Chrome.phone ? 0px : events-title.preferred-width;
+            events-title := Text {
+                width: 100%;
+                overflow: elide;
+                text: Chrome.list-alerts-only ? I18n.nav-reminder-list : I18n.nav-event-list;
+                font-family: Palette.font-display;
+                font-size: 1.15rem;
+                font-weight: 600;
+                color: Palette.text-primary;
+                vertical-alignment: center;
+                horizontal-alignment: Chrome.phone ? left : center;
+            }
+        }
         if (Chrome.page == AppPage.settings): Text {
             text: I18n.nav-settings;
             font-family: Palette.font-display;
@@ -125,7 +140,7 @@ export component Header inherits Rectangle {
 
         if (!Chrome.phone): Rectangle { horizontal-stretch: 1; }
 
-        if (!Chrome.phone && (Chrome.page == AppPage.day || Chrome.page == AppPage.week || Chrome.page == AppPage.month)): InkButton {
+        if (!Chrome.phone && (Chrome.page == AppPage.day || Chrome.page == AppPage.week || Chrome.page == AppPage.month || Chrome.page == AppPage.events)): InkButton {
             label: I18n.event;
             has-icon: true;
             icon: @image-url("icons/plus.svg");
@@ -134,7 +149,7 @@ export component Header inherits Rectangle {
             }
         }
 
-        if (Chrome.phone && (Chrome.page == AppPage.day || Chrome.page == AppPage.week || Chrome.page == AppPage.month)): IconButton {
+        if (Chrome.phone && (Chrome.page == AppPage.day || Chrome.page == AppPage.week || Chrome.page == AppPage.month || Chrome.page == AppPage.events)): IconButton {
             size: 32px;
             icon: @image-url("icons/plus.svg");
             clicked => {

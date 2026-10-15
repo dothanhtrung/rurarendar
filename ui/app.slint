@@ -6,6 +6,7 @@ import { Header } from "header.slint";
 import { MonthView } from "month-view.slint";
 import { WeekView } from "week-view.slint";
 import { DayView } from "day-view.slint";
+import { EventListView } from "event-list-view.slint";
 import { SettingsView } from "settings-view.slint";
 import { AboutView } from "about-view.slint";
 import { JumpPopup, EventSheet, DayListPopup, ProfileSheet } from "overlays.slint";
@@ -47,6 +48,7 @@ export component AppWindow inherits Window {
                 if (Chrome.page == AppPage.month): MonthView { }
                 if (Chrome.page == AppPage.week): WeekView { }
                 if (Chrome.page == AppPage.day): DayView { }
+                if (Chrome.page == AppPage.events): EventListView { }
                 if (Chrome.page == AppPage.settings): SettingsView { }
                 if (Chrome.page == AppPage.about): AboutView { }
             }

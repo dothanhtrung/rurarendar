@@ -1,0 +1,174 @@
+import { ScrollView } from "std-widgets.slint";
+import { Palette, AgendaRow } from "theme-default.slint";
+import { Chrome, Calendar } from "demo-data.slint";
+import { I18n } from "i18n.slint";
+
+component AgendaEvent inherits Rectangle {
+    in property <string> title;
+    in property <string> time;
+    in property <bool> enabled: true;
+    in property <string> delete-label;
+    callback clicked();
+    callback delete();
+
+    min-width: 0px;
+    min-height: 52px;
+    opacity: root.enabled ? 1 : 0.45;
+    border-radius: Palette.radius-sm;
+    background: body.has-hover ? Palette.bg-hover : transparent;
+
+    HorizontalLayout {
+        padding: 8px;
+        spacing: 12px;
+        alignment: center;
+
+        Rectangle {
+            width: 4px;
+            height: 28px;
+            border-radius: 2px;
+            background: Palette.mark-event;
+        }
+
+        body := TouchArea {
+            horizontal-stretch: 1;
+            min-width: 0px;
+            mouse-cursor: pointer;
+            clicked => {
+                root.clicked();
+            }
+            VerticalLayout {
+                alignment: center;
+                spacing: 2px;
+                Text {
+                    text: root.title;
+                    color: Palette.text-primary;
+                    font-size: 0.95rem;
+                    font-weight: 600;
+                    overflow: elide;
+                    min-width: 0px;
+                    horizontal-stretch: 1;
+                }
+                Text {
+                    text: root.time;
+                    color: Palette.text-muted;
+                    font-size: 0.8rem;
+                    overflow: elide;
+                    min-width: 0px;
+                    horizontal-stretch: 1;
+                }
+            }
+        }
+
+        Rectangle {
+            border-radius: Palette.radius-sm;
+            border-width: 1px;
+            border-color: Palette.border;
+            background: del.has-hover ? Palette.bg-hover : transparent;
+            del := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    root.delete();
+                }
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    min-height: 32px;
+                    alignment: center;
+                    Text {
+                        text: root.delete-label;
+                        color: Palette.text-primary;
+                        font-size: 0.8rem;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+    }
+}
+
+component AgendaBody inherits VerticalLayout {
+    in property <[AgendaRow]> rows;
+    spacing: 2px;
+
+    for row[idx] in root.rows: VerticalLayout {
+        if (row.header): HorizontalLayout {
+            height: 36px;
+            padding-left: 12px;
+            padding-right: 12px;
+            Text {
+                text: row.today ? (I18n.today + " · " + root.rows[idx].title) : root.rows[idx].title;
+                color: row.today ? Palette.mark-today : Palette.text-secondary;
+                font-size: 0.8rem;
+                font-weight: 700;
+                vertical-alignment: center;
+                overflow: elide;
+                min-width: 0px;
+                horizontal-stretch: 1;
+            }
+        }
+        if (!row.header): AgendaEvent {
+            title: root.rows[idx].title;
+            time: root.rows[idx].time;
+            enabled: root.rows[idx].enabled;
+            delete-label: I18n.row-delete;
+            clicked => {
+                Calendar.open-listed-event(root.rows[idx].id, root.rows[idx].year, root.rows[idx].month, root.rows[idx].day);
+            }
+            delete => {
+                Calendar.delete-event(root.rows[idx].id);
+            }
+        }
+    }
+}
+
+export component EventListView inherits Rectangle {
+    background: Palette.bg-app;
+
+    ScrollView {
+        width: 100%;
+        height: 100%;
+        mouse-drag-pan-enabled: true;
+
+        HorizontalLayout {
+            width: max(root.width, 1px);
+            alignment: center;
+            padding-top: Chrome.phone ? 12px : 24px;
+            padding-bottom: 32px;
+            padding-left: 16px;
+            padding-right: 16px;
+
+            VerticalLayout {
+                width: min(720px, max(root.width - 32px, 280px));
+                spacing: 8px;
+                alignment: start;
+
+                if (Calendar.agenda-status != ""): Text {
+                    text: Calendar.agenda-status;
+                    color: Palette.text-secondary;
+                    font-size: 0.85rem;
+                    wrap: word-wrap;
+                }
+
+                if (!Chrome.list-alerts-only && Calendar.upcoming-events.length == 0): Text {
+                    text: I18n.empty-event-list;
+                    color: Palette.text-muted;
+                    font-size: 0.95rem;
+                    wrap: word-wrap;
+                }
+                if (Chrome.list-alerts-only && Calendar.upcoming-alerts.length == 0): Text {
+                    text: I18n.empty-reminder-list;
+                    color: Palette.text-muted;
+                    font-size: 0.95rem;
+                    wrap: word-wrap;
+                }
+                if (!Chrome.list-alerts-only): AgendaBody {
+                    rows: Calendar.upcoming-events;
+                }
+                if (Chrome.list-alerts-only): AgendaBody {
+                    rows: Calendar.upcoming-alerts;
+                }
+            }
+        }
+    }
+}

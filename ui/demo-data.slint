@@ -1,9 +1,11 @@
-import { AppPage, DayCellData, TimedEvent, DayEvent, ProfileRow, Palette } from "theme-default.slint";
+import { AppPage, DayCellData, TimedEvent, DayEvent, AgendaRow, ProfileRow, Palette } from "theme-default.slint";
 import { I18n } from "i18n.slint";
 
 export global Chrome {
     in-out property <AppPage> page: AppPage.month;
     in-out property <AppPage> calendar-page: AppPage.month;
+    // Event-list mode. True shows only upcoming occurrences that will alert.
+    in-out property <bool> list-alerts-only: false;
     // Fixed slots: this Slint build has no array push/remove.
     private property <int> back-depth: 0;
     private property <AppPage> hist0: AppPage.month;
@@ -161,6 +163,9 @@ export global Calendar {
     in-out property <[TimedEvent]> week-events;
     in-out property <[DayEvent]> day-events;
     in-out property <[DayEvent]> day-popup-items;
+    in-out property <[AgendaRow]> upcoming-events;
+    in-out property <[AgendaRow]> upcoming-alerts;
+    in-out property <string> agenda-status;
     in-out property <string> day-list-status;
     in-out property <[string]> weekdays: ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
     in-out property <string> period-month-title;
@@ -203,6 +208,8 @@ export global Calendar {
     callback jump-to();
     callback open-event-sheet();
     callback open-event(string);
+    // Open the event, and treat year-month-day as the occurrence "this day" acts on.
+    callback open-listed-event(string, int, int, int);
     callback save-event();
     // action: 0 disable, 1 enable, 2 delete. Always the event, for the chosen scope.
     callback apply-item-action(int);

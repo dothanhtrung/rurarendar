@@ -79,6 +79,24 @@ export component Sidebar inherits Rectangle {
                 root.open-page(AppPage.day);
             }
         }
+        NavItem {
+            label: I18n.nav-event-list;
+            icon: @image-url("icons/event-list.svg");
+            selected: Chrome.page == AppPage.events && !Chrome.list-alerts-only;
+            clicked => {
+                Chrome.list-alerts-only = false;
+                root.open-page(AppPage.events);
+            }
+        }
+        NavItem {
+            label: I18n.nav-reminder-list;
+            icon: @image-url("icons/reminder.svg");
+            selected: Chrome.page == AppPage.events && Chrome.list-alerts-only;
+            clicked => {
+                Chrome.list-alerts-only = true;
+                root.open-page(AppPage.events);
+            }
+        }
 
         Text {
             text: I18n.profiles;
