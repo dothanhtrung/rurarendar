@@ -29,6 +29,10 @@ export struct DayCellData {
     tiet-khi-time: string,
     has-event: bool,
     title: string,
+    // Profile palette indexes on this day, in first-seen order. -1 is an empty slot.
+    mark0: int,
+    mark1: int,
+    mark2: int,
 }
 
 export struct TimedEvent {
@@ -40,6 +44,8 @@ export struct TimedEvent {
     // Empty for blocks that are not a stored user event.
     id: string,
     enabled: bool,
+    // ProfileColor index. Negative: not a profile event.
+    color: int,
 }
 
 export struct DayEvent {
@@ -48,6 +54,8 @@ export struct DayEvent {
     // Empty for holidays and other rows that cannot be edited.
     id: string,
     enabled: bool,
+    // ProfileColor index. -2 keeps the holiday mark; -1 is the generic event mark.
+    color: int,
 }
 
 // One agenda line. A header is the civil date; an event row is one upcoming occurrence.
@@ -63,6 +71,8 @@ export struct AgendaRow {
     month: int,
     day: int,
     today: bool,
+    // ProfileColor index. Negative when this row is a header, holiday, or feed.
+    color: int,
 }
 
 export struct ProfileRow {
@@ -72,6 +82,8 @@ export struct ProfileRow {
     active: bool,
     // Shipped assets catalog. It can be hidden, not deleted.
     embedded: bool,
+    // ProfileColor index. Negative for a row that is not a profile (a feed).
+    color: int,
 }
 
 struct Swatch {
@@ -431,4 +443,27 @@ export global Palette {
 
     out property <string> font-ui: "Noto Sans";
     out property <string> font-display: Theme.scheme-index == 2 ? "Noto Sans" : "Noto Serif";
+}
+
+// One swatch per profile, in sidebar order. Dark enough for light text on a week block,
+// and distinct on both cream cells and the dark sidebar. Keep the length in step with
+// PROFILE_COLOR_COUNT in view.rs.
+export global ProfileColor {
+    out property <[color]> hues: [
+        #1B6B72,
+        #B4531A,
+        #2C4FB8,
+        #6E3A94,
+        #1E7A43,
+        #8A5A12,
+        #A3324E,
+        #35597A,
+    ];
+
+    pure public function at(index: int) -> brush {
+        if (index < 0 || hues.length == 0) {
+            return Palette.mark-event;
+        }
+        return hues[Math.mod(index, hues.length)];
+    }
 }

@@ -1,5 +1,5 @@
 import { ScrollView } from "std-widgets.slint";
-import { Palette, AgendaRow, AppPage } from "theme-default.slint";
+import { Palette, ProfileColor, AgendaRow, AppPage } from "theme-default.slint";
 import { Chrome, Calendar } from "demo-data.slint";
 import { I18n } from "i18n.slint";
 
@@ -8,6 +8,8 @@ component AgendaEvent inherits Rectangle {
     in property <string> time;
     in property <bool> enabled: true;
     in property <bool> holiday: false;
+    // ProfileColor index. Negative keeps the holiday or generic mark.
+    in property <int> mark-index: -1;
     in property <bool> can-delete: true;
     in property <string> delete-label;
     callback clicked();
@@ -28,7 +30,7 @@ component AgendaEvent inherits Rectangle {
             width: 4px;
             height: 28px;
             border-radius: 2px;
-            background: root.holiday ? Palette.mark-holiday : Palette.mark-event;
+            background: root.mark-index >= 0 ? ProfileColor.at(root.mark-index) : root.holiday ? Palette.mark-holiday : Palette.mark-event;
         }
 
         body := TouchArea {
@@ -114,6 +116,7 @@ component AgendaBody inherits VerticalLayout {
             time: root.rows[idx].time;
             enabled: root.rows[idx].enabled;
             holiday: root.rows[idx].holiday;
+            mark-index: root.rows[idx].color;
             can-delete: root.rows[idx].id != "";
             delete-label: I18n.row-delete;
             clicked => {

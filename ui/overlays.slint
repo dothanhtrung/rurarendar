@@ -208,6 +208,7 @@ export component DayListPopup inherits Rectangle {
                     for item[idx] in Calendar.day-popup-items: EventRow {
                         time: item.time;
                         title: item.title;
+                        mark-index: item.color;
                         enabled: item.enabled;
                         can-delete: item.id != "";
                         delete-label: I18n.row-delete;

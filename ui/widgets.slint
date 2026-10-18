@@ -1,4 +1,4 @@
-import { Palette, DayCellData, ProfileRow } from "theme-default.slint";
+import { Palette, ProfileColor, DayCellData, ProfileRow } from "theme-default.slint";
 import { Calendar, Chrome, Motion } from "demo-data.slint";
 
 // Tracks one PopupWindow for the Android back gesture. `changed` only accepts a local name.
@@ -241,6 +241,13 @@ export component ProfileNavRow inherits Rectangle {
             }
         }
 
+        if (data.color >= 0): Rectangle {
+            width: 8px;
+            height: 8px;
+            border-radius: 4px;
+            background: ProfileColor.at(data.color);
+        }
+
         Text {
             text: data.name;
             color: Palette.text-on-sidebar;
@@ -425,11 +432,23 @@ export component DateCell inherits Rectangle {
                     height: 7px;
                     background: Palette.mark-tiet-khi;
                 }
-                if (data.has-event && !data.holiday && !data.tiet-khi): Rectangle {
+                if (data.mark0 >= 0): Rectangle {
                     width: 7px;
                     height: 7px;
                     border-radius: 4px;
-                    background: Palette.mark-event;
+                    background: ProfileColor.at(data.mark0);
+                }
+                if (data.mark1 >= 0): Rectangle {
+                    width: 7px;
+                    height: 7px;
+                    border-radius: 4px;
+                    background: ProfileColor.at(data.mark1);
+                }
+                if (data.mark2 >= 0): Rectangle {
+                    width: 7px;
+                    height: 7px;
+                    border-radius: 4px;
+                    background: ProfileColor.at(data.mark2);
                 }
             }
         }
@@ -651,8 +670,10 @@ export component SelectField inherits Rectangle {
 export component EventRow inherits Rectangle {
     in property <string> time;
     in property <string> title;
-    in property <brush> mark: Palette.mark-event;
+    // ProfileColor index. -2 is a holiday or feed; -1 is the generic event mark.
+    in property <int> mark-index: -1;
     in property <bool> enabled: true;
+    property <brush> mark: root.mark-index >= 0 ? ProfileColor.at(root.mark-index) : root.mark-index < -1 ? Palette.mark-holiday : Palette.mark-event;
     in property <bool> can-delete: false;
     in property <string> delete-label;
     callback clicked();

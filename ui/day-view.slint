@@ -173,6 +173,7 @@ component DayEventsCard inherits Rectangle {
         for ev[idx] in Calendar.day-events: EventRow {
             time: ev.time;
             title: ev.title;
+            mark-index: ev.color;
             enabled: ev.enabled;
             can-delete: ev.id != "";
             delete-label: I18n.row-delete;
