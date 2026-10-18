@@ -1,5 +1,5 @@
 import { Palette, DayCellData, ProfileRow } from "theme-default.slint";
-import { Calendar, Chrome } from "demo-data.slint";
+import { Calendar, Chrome, Motion } from "demo-data.slint";
 
 // Tracks one PopupWindow for the Android back gesture. `changed` only accepts a local name.
 export component PopupWatch inherits Rectangle {
@@ -37,11 +37,7 @@ export component PeriodGesture inherits Rectangle {
         }
         root.carry-x = 0px;
         root.carry-y = 0px;
-        if (next) {
-            Calendar.next-period();
-        } else {
-            Calendar.prev-period();
-        }
+        Motion.period(next);
     }
 
     SwipeGestureHandler {

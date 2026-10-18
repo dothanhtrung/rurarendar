@@ -162,6 +162,8 @@ pub struct Bundle {
     pub mode_auto: String,
     pub mode_light: String,
     pub mode_dark: String,
+    pub animations_label: String,
+    pub animations_body: String,
     pub switch_to_light: String,
     pub switch_to_dark: String,
     pub legend_holiday: String,
@@ -330,6 +332,8 @@ pub fn apply(ui: &AppWindow, pref: LocalePref, bundle: &Bundle) {
     g.set_mode_auto(s(&bundle.mode_auto));
     g.set_mode_light(s(&bundle.mode_light));
     g.set_mode_dark(s(&bundle.mode_dark));
+    g.set_animations_label(s(&bundle.animations_label));
+    g.set_animations_body(s(&bundle.animations_body));
     g.set_switch_to_light(s(&bundle.switch_to_light));
     g.set_switch_to_dark(s(&bundle.switch_to_dark));
     g.set_legend_holiday(s(&bundle.legend_holiday));

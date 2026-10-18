@@ -41,6 +41,7 @@ pub enum SyncCmd {
     SetLocale(String),
     // Local appearance only. Not pushed to the server.
     SetTheme { scheme: String, mode: String },
+    SetAnimations(bool),
     UpsertProfile(crate::profile::Profile),
     DeleteProfile(crate::profile::ProfileId),
     SetActiveProfile(crate::profile::ProfileId),
@@ -238,6 +239,12 @@ async fn worker(
             SyncCmd::SetTheme { scheme, mode } => {
                 config.color_scheme = scheme;
                 config.color_mode = mode;
+                if let Err(e) = config.save(&config_path) {
+                    let _ = events.send(SyncEvent::Error(e.to_string()));
+                }
+            }
+            SyncCmd::SetAnimations(enabled) => {
+                config.animations = enabled;
                 if let Err(e) = config.save(&config_path) {
                     let _ = events.send(SyncEvent::Error(e.to_string()));
                 }

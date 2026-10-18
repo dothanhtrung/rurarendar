@@ -270,3 +270,22 @@ export global Calendar {
         return Palette.bg-day-weekday;
     }
 }
+
+// Short motion. `enabled` is the Settings switch; duration 0 skips the animation.
+export global Motion {
+    in-out property <bool> enabled: true;
+    // +1: the next period enters from the right. -1: the previous period enters from the left.
+    in-out property <int> period-dir: 1;
+    in-out property <int> period-seq: 0;
+    callback save-enabled();
+
+    public function period(next: bool) {
+        if (next) {
+            Calendar.next-period();
+        } else {
+            Calendar.prev-period();
+        }
+        period-dir = next ? 1 : -1;
+        period-seq += 1;
+    }
+}

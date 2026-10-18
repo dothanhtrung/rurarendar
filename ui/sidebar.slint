@@ -1,5 +1,5 @@
 import { Palette, AppPage } from "theme-default.slint";
-import { Chrome, Profiles, Feeds } from "demo-data.slint";
+import { Chrome, Profiles, Feeds, Motion } from "demo-data.slint";
 import { I18n } from "i18n.slint";
 import { NavItem, ProfileNavRow } from "widgets.slint";
 
@@ -8,8 +8,12 @@ export component Sidebar inherits Rectangle {
     background: Palette.bg-sidebar;
     clip: true;
     horizontal-stretch: 0;
-    width: close-on-navigate || Chrome.sidebar-open ? Palette.sidebar-width : 0;
-    animate width { duration: 180ms; }
+    // Phone drawer is moved by its parent (`close-on-navigate`). On desktop the
+    // column grows while the panel slides in from the left, so both stay in step.
+    private property <duration> slide: Motion.enabled ? 140ms : 0ms;
+    private property <length> shown: close-on-navigate || Chrome.sidebar-open ? Palette.sidebar-width : 0px;
+    width: shown;
+    animate shown { duration: slide; easing: ease-out; }
 
     function open-page(page: AppPage) {
         Chrome.open(page);
@@ -19,6 +23,9 @@ export component Sidebar inherits Rectangle {
     }
 
     VerticalLayout {
+        x: root.shown - Palette.sidebar-width;
+        width: Palette.sidebar-width;
+        height: 100%;
         padding: 16px;
         spacing: 4px;
 

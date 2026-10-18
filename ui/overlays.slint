@@ -21,6 +21,7 @@ component JumpTab inherits Rectangle {
 }
 
 export component JumpPopup inherits Rectangle {
+    in property <float> reveal: 1;
     background: Palette.overlay;
     ta := TouchArea {
         clicked => {
@@ -31,12 +32,14 @@ export component JumpPopup inherits Rectangle {
     Rectangle {
         width: 420px;
         x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
+        y: (parent.height - self.height) / 2 + (1 - root.reveal) * 8px;
         height: box.preferred-height;
         border-radius: 12px;
         background: Palette.bg-surface;
         drop-shadow-blur: 32px;
         drop-shadow-color: Palette.shadow;
+        transform-scale: 96% + root.reveal * 4%;
+        transform-origin: { x: self.width / 2, y: self.height / 2 };
 
         TouchArea { }
 
@@ -128,6 +131,7 @@ component SheetTab inherits Rectangle {
 }
 
 export component DayListPopup inherits Rectangle {
+    in property <float> reveal: 1;
     background: Palette.overlay;
     ta := TouchArea {
         clicked => {
@@ -138,13 +142,15 @@ export component DayListPopup inherits Rectangle {
     Rectangle {
         width: min(440px, max(parent.width - 32px, 0px));
         x: (parent.width - self.width) / 2;
-        y: max((parent.height - self.height) / 2, 24px);
+        y: max((parent.height - self.height) / 2, 24px) + (1 - root.reveal) * 8px;
         height: min(box.preferred-height, max(parent.height - 48px, 120px));
         clip: true;
         border-radius: 12px;
         background: Palette.bg-surface;
         drop-shadow-blur: 32px;
         drop-shadow-color: Palette.shadow;
+        transform-scale: 96% + root.reveal * 4%;
+        transform-origin: { x: self.width / 2, y: self.height / 2 };
 
         TouchArea { }
 
@@ -233,6 +239,7 @@ export component DayListPopup inherits Rectangle {
 }
 
 export component EventSheet inherits Rectangle {
+    in property <float> reveal: 1;
     background: Palette.overlay;
     ta := TouchArea {
         clicked => {
@@ -243,13 +250,15 @@ export component EventSheet inherits Rectangle {
     Rectangle {
         width: min(480px, max(parent.width - 32px, 0px));
         x: (parent.width - self.width) / 2;
-        y: max((parent.height - self.height) / 2, 16px);
+        y: max((parent.height - self.height) / 2, 16px) + (1 - root.reveal) * 8px;
         height: min(box.preferred-height, max(parent.height - 32px, 200px));
         clip: true;
         border-radius: 12px;
         background: Palette.bg-surface;
         drop-shadow-blur: 32px;
         drop-shadow-color: Palette.shadow;
+        transform-scale: 96% + root.reveal * 4%;
+        transform-origin: { x: self.width / 2, y: self.height / 2 };
         TouchArea { }
         Flickable {
             width: parent.width;
@@ -409,6 +418,7 @@ export component EventSheet inherits Rectangle {
 }
 
 export component ProfileSheet inherits Rectangle {
+    in property <float> reveal: 1;
     background: Palette.overlay;
     TouchArea {
         clicked => {
@@ -418,12 +428,14 @@ export component ProfileSheet inherits Rectangle {
     Rectangle {
         width: 420px;
         x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
+        y: (parent.height - self.height) / 2 + (1 - root.reveal) * 8px;
         height: box.preferred-height;
         border-radius: 12px;
         background: Palette.bg-surface;
         drop-shadow-blur: 32px;
         drop-shadow-color: Palette.shadow;
+        transform-scale: 96% + root.reveal * 4%;
+        transform-origin: { x: self.width / 2, y: self.height / 2 };
         TouchArea { }
         box := VerticalLayout {
             padding: 24px;
@@ -474,6 +486,7 @@ export component ProfileSheet inherits Rectangle {
 }
 
 export component IcalSheet inherits Rectangle {
+    in property <float> reveal: 1;
     background: Palette.overlay;
     TouchArea {
         clicked => {
@@ -483,12 +496,14 @@ export component IcalSheet inherits Rectangle {
     Rectangle {
         width: 420px;
         x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
+        y: (parent.height - self.height) / 2 + (1 - root.reveal) * 8px;
         height: box.preferred-height;
         border-radius: 12px;
         background: Palette.bg-surface;
         drop-shadow-blur: 32px;
         drop-shadow-color: Palette.shadow;
+        transform-scale: 96% + root.reveal * 4%;
+        transform-origin: { x: self.width / 2, y: self.height / 2 };
         TouchArea { }
         box := VerticalLayout {
             padding: 24px;

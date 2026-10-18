@@ -1,5 +1,5 @@
 import { Palette, AppPage, Theme } from "theme-default.slint";
-import { Chrome, Calendar, Sync, Profiles, Feeds } from "demo-data.slint";
+import { Chrome, Calendar, Sync, Profiles, Feeds, Motion } from "demo-data.slint";
 import { I18n } from "i18n.slint";
 import { Sidebar } from "sidebar.slint";
 import { Header } from "header.slint";
@@ -11,7 +11,60 @@ import { SettingsView } from "settings-view.slint";
 import { AboutView } from "about-view.slint";
 import { JumpPopup, EventSheet, DayListPopup, ProfileSheet, IcalSheet } from "overlays.slint";
 
-export { Palette, Chrome, Calendar, Sync, I18n, Theme, Profiles, Feeds }
+export { Palette, Chrome, Calendar, Sync, I18n, Theme, Profiles, Feeds, Motion }
+
+component PeriodPane inherits Rectangle {
+    clip: true;
+    vertical-stretch: 1;
+    horizontal-stretch: 1;
+    // Set while placing the incoming page, so that step does not animate.
+    private property <bool> snap: false;
+    private property <length> shift: 0px;
+    private property <int> seq: Motion.period-seq;
+    animate shift {
+        duration: snap || !Motion.enabled ? 0ms : 130ms;
+        easing: ease-out;
+    }
+
+    changed seq => {
+        if (!Motion.enabled) {
+            return;
+        }
+        root.snap = true;
+        root.shift = Motion.period-dir < 0 ? -min(root.width * 0.12, 64px) : min(root.width * 0.12, 64px);
+        root.snap = false;
+        root.shift = 0px;
+    }
+
+    VerticalLayout {
+        x: root.shift;
+        width: parent.width;
+        height: parent.height;
+        if (Chrome.page == AppPage.month): MonthView { }
+        if (Chrome.page == AppPage.week): WeekView { }
+        if (Chrome.page == AppPage.day): DayView { }
+    }
+}
+
+// Stays in the tree so the close can pop out, then hides when the motion ends.
+component PopupLayer inherits Rectangle {
+    in property <bool> open;
+    out property <float> reveal: open ? 1 : 0;
+    width: 100%;
+    height: 100%;
+    visible: open || reveal > 0;
+    animate reveal {
+        duration: Motion.enabled ? 110ms : 0ms;
+        easing: ease-out;
+    }
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        opacity: max(root.reveal, 0);
+        @children
+    }
+}
 
 export component AppWindow inherits Window {
     title: I18n.app-name;
@@ -45,40 +98,65 @@ export component AppWindow inherits Window {
             if (!Chrome.phone): Sidebar { }
             VerticalLayout {
                 Header { }
-                if (Chrome.page == AppPage.month): MonthView { }
-                if (Chrome.page == AppPage.week): WeekView { }
-                if (Chrome.page == AppPage.day): DayView { }
+                if (Chrome.page == AppPage.day || Chrome.page == AppPage.week || Chrome.page == AppPage.month): PeriodPane { }
                 if (Chrome.page == AppPage.events): EventListView { }
                 if (Chrome.page == AppPage.settings): SettingsView { }
                 if (Chrome.page == AppPage.about): AboutView { }
             }
         }
 
-        // Phone: overlay under the header so the menu button can close it.
-        if (Chrome.phone && Chrome.sidebar-open): Rectangle {
-            x: 0px;
+        // Phone: the drawer stays mounted so it can slide off, not vanish.
+        if (Chrome.phone): Rectangle {
             y: Palette.header-height;
             width: 100%;
             height: parent.height - Palette.header-height;
-            background: Palette.overlay;
+            clip: true;
+            property <length> travel: Chrome.sidebar-open ? 0px : -Palette.sidebar-width;
+            property <float> veil: Chrome.sidebar-open ? 1 : 0;
+            animate travel { duration: Motion.enabled ? 140ms : 0ms; easing: ease-out; }
+            animate veil { duration: Motion.enabled ? 140ms : 0ms; easing: ease-out; }
+            visible: Chrome.sidebar-open || travel > -Palette.sidebar-width;
+
             TouchArea {
+                width: 100%;
+                height: 100%;
+                enabled: Chrome.sidebar-open;
                 clicked => {
                     Chrome.sidebar-open = false;
+                }
+                Rectangle {
+                    background: Palette.overlay;
+                    opacity: veil;
                 }
             }
             Sidebar {
                 close-on-navigate: true;
-                x: 0px;
+                x: travel;
                 y: 0px;
                 height: 100%;
             }
         }
 
-        if (Chrome.jump-open): JumpPopup { }
-        if (Chrome.day-list-open): DayListPopup { }
-        if (Chrome.event-sheet-open): EventSheet { }
-        if (Chrome.profile-sheet-open): ProfileSheet { }
-        if (Feeds.sheet-open): IcalSheet { }
+        jump-layer := PopupLayer {
+            open: Chrome.jump-open;
+            JumpPopup { reveal: jump-layer.reveal; }
+        }
+        day-layer := PopupLayer {
+            open: Chrome.day-list-open;
+            DayListPopup { reveal: day-layer.reveal; }
+        }
+        event-layer := PopupLayer {
+            open: Chrome.event-sheet-open;
+            EventSheet { reveal: event-layer.reveal; }
+        }
+        profile-layer := PopupLayer {
+            open: Chrome.profile-sheet-open;
+            ProfileSheet { reveal: profile-layer.reveal; }
+        }
+        ical-layer := PopupLayer {
+            open: Feeds.sheet-open;
+            IcalSheet { reveal: ical-layer.reveal; }
+        }
         }
     }
 }

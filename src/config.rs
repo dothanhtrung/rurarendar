@@ -26,6 +26,10 @@ fn default_color_mode() -> String {
     "auto".into()
 }
 
+fn default_animations() -> bool {
+    true
+}
+
 fn default_server_url() -> String {
     "http://127.0.0.1:8080".into()
 }
@@ -42,6 +46,8 @@ pub struct Config {
     pub color_scheme: String,
     #[serde(default = "default_color_mode")]
     pub color_mode: String,
+    #[serde(default = "default_animations")]
+    pub animations: bool,
     pub active_profile: i64,
     #[serde(default = "default_server_url")]
     pub server_url: String,
@@ -62,6 +68,7 @@ impl Default for Config {
             ui_locale: default_ui_locale(),
             color_scheme: default_color_scheme(),
             color_mode: default_color_mode(),
+            animations: default_animations(),
             active_profile: 0,
             server_url: default_server_url(),
             username: String::new(),
@@ -138,10 +145,12 @@ mod tests {
         assert_eq!(loaded.ui_locale, "auto");
         assert_eq!(loaded.color_scheme, "modern");
         assert_eq!(loaded.server_url, "http://127.0.0.1:8080");
+        assert!(loaded.animations);
         assert!(loaded.old_encrypt_key.is_none());
 
         let mut config = loaded;
         config.ui_locale = "vi".into();
+        config.animations = false;
         config.encrypt_key = "secret".into();
         config.old_encrypt_key = Some(String::new());
         config.active_profile = 3;
@@ -149,6 +158,7 @@ mod tests {
 
         let again = Config::load(&path).unwrap();
         assert_eq!(again.ui_locale, "vi");
+        assert!(!again.animations);
         assert_eq!(again.encrypt_key, "secret");
         assert_eq!(again.old_encrypt_key.as_deref(), Some(""));
         assert_eq!(again.active_profile, 3);
@@ -162,6 +172,7 @@ mod tests {
         let config = Config::load(&path).unwrap();
         assert_eq!(config.db, "sqlite::memory:");
         assert_eq!(config.color_mode, "auto");
+        assert!(config.animations);
         assert_eq!(config.server_url, "http://127.0.0.1:8080");
         let _ = std::fs::remove_file(&path);
     }

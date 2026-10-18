@@ -1,5 +1,5 @@
 import { Palette, AppPage, Theme } from "theme-default.slint";
-import { Chrome, Calendar } from "demo-data.slint";
+import { Chrome, Calendar, Motion } from "demo-data.slint";
 import { I18n } from "i18n.slint";
 import { IconButton, InkButton } from "widgets.slint";
 
@@ -43,7 +43,7 @@ export component Header inherits Rectangle {
                 icon: @image-url("icons/chevron-left.svg");
                 tip: Chrome.phone ? "" : I18n.prev;
                 clicked => {
-                    Calendar.prev-period();
+                    Motion.period(false);
                 }
             }
 
@@ -85,7 +85,7 @@ export component Header inherits Rectangle {
                 icon: @image-url("icons/chevron-right.svg");
                 tip: Chrome.phone ? "" : I18n.next;
                 clicked => {
-                    Calendar.next-period();
+                    Motion.period(true);
                 }
             }
 

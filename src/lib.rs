@@ -143,6 +143,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     let locale_pref = i18n::LocalePref::from_setting(&config.ui_locale);
     let color_scheme = theme::ColorSchemeId::from_setting(&config.color_scheme);
     let color_mode = theme::ColorMode::from_setting(&config.color_mode);
+    let animations = config.animations;
     let catalogs_dir = config.catalogs_dir();
 
     let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
@@ -203,6 +204,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     let bundle = i18n::Bundle::load(locale_pref.resolve());
     i18n::apply(&ui, locale_pref, &bundle);
     theme::apply(&ui, color_scheme, color_mode);
+    ui.global::<ui::Motion>().set_enabled(animations);
     refresh(&ui, &mut state.borrow_mut());
     let (_sync_timer, _pull_timer, _notification_timer) = bind::wire(&ui, state, sync_tx, sync_rx);
     ui.run()?;

@@ -72,6 +72,8 @@
   "mode_auto": "Auto (system)",
   "mode_light": "Light",
   "mode_dark": "Dark",
+  "animations_label": "Animation",
+  "animations_body": "Turn off for a lighter interface and better battery life.",
   "switch_to_light": "Switch to light",
   "switch_to_dark": "Switch to dark",
   "legend_holiday": "Holiday",

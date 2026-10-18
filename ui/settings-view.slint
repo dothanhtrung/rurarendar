@@ -1,8 +1,8 @@
 import { ScrollView } from "std-widgets.slint";
 import { Palette, Theme } from "theme-default.slint";
-import { Sync } from "demo-data.slint";
+import { Sync, Motion } from "demo-data.slint";
 import { I18n } from "i18n.slint";
-import { Field, InkButton, SelectField } from "widgets.slint";
+import { Field, InkButton, SelectField, CheckRow } from "widgets.slint";
 
 component SettingsCard inherits Rectangle {
     in property <string> title;
@@ -228,6 +228,20 @@ export component SettingsView inherits Rectangle {
                             changed(i) => {
                                 Theme.mode-changed(i);
                             }
+                        }
+
+                        CheckRow {
+                            label: I18n.animations-label;
+                            checked <=> Motion.enabled;
+                            toggled => {
+                                Motion.save-enabled();
+                            }
+                        }
+                        Text {
+                            text: I18n.animations-body;
+                            color: Palette.text-secondary;
+                            font-size: 0.85rem;
+                            wrap: word-wrap;
                         }
                     }
                 }

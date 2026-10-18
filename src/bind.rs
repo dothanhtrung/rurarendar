@@ -35,6 +35,7 @@ use crate::ui::{
     I18n,
     Feeds,
     Profiles,
+    Motion,
     Sync,
     Theme,
 };
@@ -223,6 +224,14 @@ pub fn wire(
                 scheme: scheme.as_str().into(),
                 mode: mode.as_str().into(),
             });
+        });
+    }
+    {
+        let ui_weak = ui.as_weak();
+        let sync_tx = sync_tx.clone();
+        ui.global::<Motion>().on_save_enabled(move || {
+            let ui = ui_weak.unwrap();
+            let _ = sync_tx.send(SyncCmd::SetAnimations(ui.global::<Motion>().get_enabled()));
         });
     }
     {

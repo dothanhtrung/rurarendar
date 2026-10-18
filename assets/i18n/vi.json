@@ -72,6 +72,8 @@
   "mode_auto": "Tự động (hệ thống)",
   "mode_light": "Sáng",
   "mode_dark": "Tối",
+  "animations_label": "Hiệu ứng chuyển động",
+  "animations_body": "Tắt để giao diện nhẹ hơn và đỡ tốn pin.",
   "switch_to_light": "Chuyển sang sáng",
   "switch_to_dark": "Chuyển sang tối",
   "legend_holiday": "Ngày lễ",
