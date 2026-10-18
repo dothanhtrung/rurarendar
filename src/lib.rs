@@ -107,16 +107,18 @@ fn prepare_android(app: &slint::android::AndroidApp) -> Result<(), Box<dyn Error
     // `set_var` is process-global. This runs on the android_main thread before any other thread starts.
     unsafe {
         std::env::set_var("RURARENDAR_ASSETS", &assets);
-        std::env::set_var("RURARENDAR_DB", data.join("client.sqlite"));
-        std::env::set_var("RURARENDAR_CONFIG", data.join("rurarendar.ron"));
+        let root = config::android_data_dir();
+        std::env::set_var("RURARENDAR_DB", root.join("rurarendar.sqlite"));
+        std::env::set_var("RURARENDAR_CONFIG", root.join("rurarendar.ron"));
     }
     Ok(())
 }
 
 #[derive(Parser)]
 struct Cli {
-    #[clap(short, long, default_value = "rurarendar.ron")]
-    config: PathBuf,
+    /// Config file. Omit to use ./rurarendar.ron when it exists, otherwise the XDG config path.
+    #[clap(short, long)]
+    config: Option<PathBuf>,
 }
 
 pub fn run() -> Result<(), Box<dyn Error>> {
@@ -129,15 +131,16 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     tracing::subscriber::set_global_default(subscriber)?;
 
     let args = Cli::parse();
-    let config_path = std::env::var_os("RURARENDAR_CONFIG")
-        .map(PathBuf::from)
-        .unwrap_or(args.config);
+    // Android sets RURARENDAR_CONFIG. -c wins when both are present.
+    let config_path = if let Some(path) = args.config {
+        path
+    } else if let Some(path) = std::env::var_os("RURARENDAR_CONFIG") {
+        PathBuf::from(path)
+    } else {
+        config::default_path()
+    };
     let mut config = Config::load(&config_path)?;
-    if let Some(parent) = config.sqlite_path().parent()
-        && !parent.as_os_str().is_empty()
-    {
-        std::fs::create_dir_all(parent)?;
-    }
+    config::ensure_db_file(&config.sqlite_path())?;
 
     let (today, _) = now_local();
     let locale_pref = i18n::LocalePref::from_setting(&config.ui_locale);

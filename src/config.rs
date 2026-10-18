@@ -6,11 +6,83 @@ use anyhow::Context;
 use ron::ser::{PrettyConfig, to_string_pretty};
 use serde::{Deserialize, Serialize};
 
+pub fn android_data_dir() -> PathBuf {
+    PathBuf::from("/data/data/net.onlyesterday.rurarendar")
+}
+
 fn default_db() -> String {
-    match std::env::var("RURARENDAR_DB") {
-        Ok(path) if path.starts_with("sqlite:") => path,
-        Ok(path) => format!("sqlite://{path}"),
-        Err(_) => "sqlite://rurarendar.sqlite".into(),
+    if let Ok(path) = std::env::var("RURARENDAR_DB") {
+        if path.starts_with("sqlite:") {
+            return path;
+        }
+        return format!("sqlite://{path}");
+    }
+    if cfg!(target_os = "android") {
+        return sqlite_url(&android_data_dir().join("rurarendar.sqlite"));
+    }
+    let local = Path::new("rurarendar.sqlite");
+    if local.is_file() {
+        let path = std::env::current_dir().map(|dir| dir.join(local)).unwrap_or_else(|_| local.to_path_buf());
+        return sqlite_url(&path);
+    }
+    sqlite_url(&data_dir().join("rurarendar.sqlite"))
+}
+
+fn sqlite_url(path: &Path) -> String {
+    format!("sqlite://{}", path.display())
+}
+
+/// Android: `/data/data/net.onlyesterday.rurarendar/rurarendar.ron`.
+/// Elsewhere: `./rurarendar.ron` if it exists, otherwise `$XDG_CONFIG_HOME/rurarendar/rurarendar.ron`.
+/// `Config::load` creates that file when it is missing.
+pub fn default_path() -> PathBuf {
+    if cfg!(target_os = "android") {
+        return android_data_dir().join("rurarendar.ron");
+    }
+    prefer_existing(Path::new("rurarendar.ron"), config_dir().join("rurarendar.ron"))
+}
+
+/// Create a missing database file. Parent directories are created too.
+/// `.` and `:memory:` are left alone.
+pub fn ensure_db_file(path: &Path) -> anyhow::Result<()> {
+    if path.as_os_str().is_empty() || path == Path::new(".") || path.is_file() {
+        return Ok(());
+    }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent).with_context(|| format!("Could not create {}", parent.display()))?;
+    }
+    File::create(path).with_context(|| format!("Could not create {}", path.display()))?;
+    Ok(())
+}
+
+fn config_dir() -> PathBuf {
+    xdg_base_from_env("XDG_CONFIG_HOME", ".config").join("rurarendar")
+}
+
+fn data_dir() -> PathBuf {
+    xdg_base_from_env("XDG_DATA_HOME", ".local/share").join("rurarendar")
+}
+
+fn xdg_base_from_env(var: &str, fallback: &str) -> PathBuf {
+    let explicit = std::env::var(var).ok();
+    let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
+    xdg_base(explicit.as_deref(), &home, fallback)
+}
+
+fn xdg_base(explicit: Option<&str>, home: &Path, fallback: &str) -> PathBuf {
+    match explicit.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(path) => PathBuf::from(path),
+        None => home.join(fallback),
+    }
+}
+
+fn prefer_existing(local: &Path, fallback: PathBuf) -> PathBuf {
+    if local.is_file() {
+        local.to_path_buf()
+    } else {
+        fallback
     }
 }
 
@@ -186,5 +258,60 @@ mod tests {
         config.db = "sqlite:///tmp/client.sqlite?mode=rwc".into();
         assert_eq!(config.sqlite_path(), PathBuf::from("/tmp/client.sqlite"));
         assert_eq!(config.catalogs_dir(), PathBuf::from("/tmp/catalogs"));
+    }
+
+    #[test]
+    fn xdg_base_uses_explicit_dir_or_home_fallback() {
+        let home = Path::new("/home/user");
+        assert_eq!(xdg_base(Some("/cfg"), home, ".config"), PathBuf::from("/cfg"));
+        assert_eq!(xdg_base(Some("  "), home, ".config"), home.join(".config"));
+        assert_eq!(xdg_base(None, home, ".config"), home.join(".config"));
+        assert_eq!(xdg_base(Some(""), home, ".local/share"), home.join(".local/share"));
+    }
+
+    #[test]
+    fn existing_local_file_beats_the_fallback() {
+        let dir = std::env::temp_dir().join(format!("rurarendar-paths-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let local = dir.join("rurarendar.ron");
+        let fallback = dir.join("xdg").join("rurarendar.ron");
+        assert_eq!(prefer_existing(&local, fallback.clone()), fallback);
+        std::fs::write(&local, "x").unwrap();
+        assert_eq!(prefer_existing(&local, fallback), local);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn android_files_live_in_the_app_data_dir() {
+        let dir = android_data_dir();
+        assert_eq!(dir.join("rurarendar.ron"), PathBuf::from("/data/data/net.onlyesterday.rurarendar/rurarendar.ron"));
+        assert_eq!(
+            dir.join("rurarendar.sqlite"),
+            PathBuf::from("/data/data/net.onlyesterday.rurarendar/rurarendar.sqlite")
+        );
+    }
+
+    #[test]
+    fn absent_files_are_created_in_the_default_dir() {
+        let dir = std::env::temp_dir().join(format!("rurarendar-create-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let cwd = dir.join("cwd");
+        std::fs::create_dir_all(&cwd).unwrap();
+        let local = cwd.join("rurarendar.ron");
+        let config_file = dir.join("config").join("rurarendar").join("rurarendar.ron");
+        let db_file = dir.join("data").join("rurarendar").join("rurarendar.sqlite");
+
+        let chosen = prefer_existing(&local, config_file.clone());
+        assert_eq!(chosen, config_file);
+        let mut config = Config::default();
+        config.db = "sqlite::memory:".into();
+        config.save(&chosen).unwrap();
+        ensure_db_file(&db_file).unwrap();
+
+        assert!(config_file.is_file());
+        assert!(db_file.is_file());
+        assert!(!local.exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
