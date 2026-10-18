@@ -184,6 +184,8 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         solar_terms: SolarTermTables::new(today.year())?,
         holidays: HolidayTables::empty(),
         selected: today,
+        shown_year: today.year(),
+        shown_month: today.month(),
         today,
         events: EventStore::default(),
         feeds,

@@ -21,6 +21,9 @@ pub struct AppState {
     pub solar_terms: SolarTermTables,
     pub holidays: HolidayTables,
     pub selected: CivilDate,
+    // Month page keeps this grid while focus sits on a leading or trailing day.
+    pub shown_year: i32,
+    pub shown_month: u8,
     pub today: CivilDate,
     pub events: EventStore,
     pub feeds: Vec<IcalFeed>,

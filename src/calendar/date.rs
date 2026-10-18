@@ -113,6 +113,10 @@ impl CivilDate {
         Ok(days)
     }
 
+    pub fn in_month_grid(year: i32, month: u8, date: Self) -> bool {
+        Self::month_grid(year, month).is_ok_and(|grid| grid.contains(&date))
+    }
+
     pub fn week_days(self) -> [CivilDate; 7] {
         let start = self.monday_of_week();
         let mut days = [start; 7];

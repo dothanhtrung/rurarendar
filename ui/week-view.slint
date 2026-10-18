@@ -48,16 +48,44 @@ export component WeekView inherits Rectangle {
     vertical-stretch: 1;
     horizontal-stretch: 1;
     private property <length> min-hour-h: 36px;
-    private property <int> start-hour: 7;
-    private property <int> hour-count: 14;
+    private property <int> start-hour: Calendar.week-hour-start;
+    private property <int> hour-count: Calendar.week-hour-count;
+    private property <int> focus-row: Calendar.week-row;
     // The hour grid keeps scrolling when the day does not fit. Otherwise it pages weeks.
     private property <bool> hours-scroll: sv.visible-height / hour-count < min-hour-h;
     private property <length> hour-h: hours-scroll ? min-hour-h : sv.visible-height / hour-count;
     private property <length> grid-h: hours-scroll ? hour-count * min-hour-h : sv.visible-height;
 
     function open-day(index: int) {
+        Calendar.week-row = -1;
         Calendar.select-week-day(index);
         Chrome.open(AppPage.day);
+    }
+
+    function column-chosen(d: int) -> bool {
+        return Calendar.week-days[d].year == Calendar.selected.year && Calendar.week-days[d].month == Calendar.selected.month && Calendar.week-days[d].gregorian == Calendar.selected.gregorian;
+    }
+
+    function date-focused(d: int) -> bool {
+        return root.column-chosen(d) && Calendar.week-row < 0;
+    }
+
+    function hour-focused(d: int) -> bool {
+        return root.column-chosen(d) && Calendar.week-row >= 0;
+    }
+
+    changed focus-row => {
+        if (root.focus-row < 0 || !root.hours-scroll) {
+            return;
+        }
+        let top = root.focus-row * root.hour-h;
+        let bottom = top + root.hour-h;
+        let view-top = -sv.content-y;
+        if (top < view-top) {
+            sv.content-y = -top;
+        } else if (bottom > view-top + sv.visible-height) {
+            sv.content-y = -(bottom - sv.visible-height);
+        }
     }
 
     VerticalLayout {
@@ -70,9 +98,9 @@ export component WeekView inherits Rectangle {
             for d in 7: Rectangle {
                 horizontal-stretch: 1;
                 border-radius: Palette.radius-sm;
-                background: Calendar.week-days[d].gregorian == Calendar.selected.gregorian && Calendar.week-days[d].month == Calendar.selected.month && Calendar.week-days[d].year == Calendar.selected.year ? Palette.bg-hover : Calendar.week-days[d].holiday ? Palette.bg-day-holiday : transparent;
-                border-width: Calendar.week-days[d].today ? 1px : 0;
-                border-color: Palette.mark-today;
+                background: root.date-focused(d) ? Palette.bg-hover : Calendar.week-days[d].holiday ? Palette.bg-day-holiday : transparent;
+                border-width: root.date-focused(d) ? 2px : Calendar.week-days[d].today ? 1px : 0;
+                border-color: root.date-focused(d) ? Palette.selected-ring : Palette.mark-today;
                 Rectangle {
                     border-radius: parent.border-radius;
                     background: Palette.accent;
@@ -114,6 +142,7 @@ export component WeekView inherits Rectangle {
                     }
                     date-touch := DateTouchArea {
                         held => {
+                            Calendar.week-row = -1;
                             Calendar.select-week-day(d);
                             Chrome.day-list-open = true;
                         }
@@ -183,10 +212,25 @@ export component WeekView inherits Rectangle {
                                     opacity: hour-touch.pressed ? 0.18 : hour-touch.has-hover ? 0.08 : 0;
                                     animate opacity { duration: 120ms; easing: ease-out; }
                                 }
+                                if (root.hour-focused(d)): Rectangle {
+                                    y: Calendar.week-row * root.hour-h;
+                                    height: root.hour-h;
+                                    width: 100%;
+                                    border-width: 2px;
+                                    border-color: Palette.selected-ring;
+                                    Rectangle {
+                                        width: 100%;
+                                        height: 100%;
+                                        background: Palette.accent;
+                                        opacity: 0.14;
+                                    }
+                                }
                                 hour-touch := TouchArea {
                                     mouse-cursor: pointer;
                                     clicked => {
-                                        let hour = root.start-hour + Math.clamp(Math.floor(self.mouse-y / root.hour-h), 0, root.hour-count - 1);
+                                        let row = Math.clamp(Math.floor(self.mouse-y / root.hour-h), 0, root.hour-count - 1);
+                                        let hour = root.start-hour + row;
+                                        Calendar.week-row = row;
                                         Calendar.select-week-day(d);
                                         Chrome.day-list-open = false;
                                         Calendar.open-event-sheet();

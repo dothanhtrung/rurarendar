@@ -545,8 +545,12 @@ pub fn refresh(ui: &AppWindow, state: &mut AppState) {
     state.today = today;
     let lang = state.lang();
     let selected = state.selected;
-    let view_year = selected.year();
-    let view_month = selected.month();
+    if !CivilDate::in_month_grid(state.shown_year, state.shown_month, selected) {
+        state.shown_year = selected.year();
+        state.shown_month = selected.month();
+    }
+    let view_year = state.shown_year;
+    let view_month = state.shown_month;
     let _ = state.pin_view(view_year);
 
     let grid = CivilDate::month_grid(view_year, view_month).expect("valid view month");

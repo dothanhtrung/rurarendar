@@ -79,12 +79,76 @@ export component AppWindow inherits Window {
     forward-focus: back-keys;
 
     // Key.Back is the Android back gesture. Rejecting it lets the activity finish.
+    // Left and right move the focused day. Up and down move a row.
+    // Enter activates the focused day or hour. Escape closes a popup.
+    // Page Up and Page Down move a week or a month.
     back-keys := FocusScope {
         capture-key-pressed(event) => {
+            if (event.text == Key.Escape && Chrome.dismiss()) {
+                return accept;
+            }
             if (event.text == Key.Back && Chrome.go-back()) {
                 return accept;
             }
             return reject;
+        }
+
+        KeyBinding {
+            keys: @keys(LeftArrow);
+            enabled: Chrome.period-keys;
+            activated => {
+                Motion.focus-day(false);
+            }
+        }
+        KeyBinding {
+            keys: @keys(RightArrow);
+            enabled: Chrome.period-keys;
+            activated => {
+                Motion.focus-day(true);
+            }
+        }
+        KeyBinding {
+            keys: @keys(UpArrow);
+            enabled: Chrome.period-keys && (Chrome.page == AppPage.month || Chrome.page == AppPage.week);
+            activated => {
+                if (Chrome.page == AppPage.week) {
+                    Motion.focus-week-row(false);
+                } else {
+                    Motion.focus-row(false);
+                }
+            }
+        }
+        KeyBinding {
+            keys: @keys(DownArrow);
+            enabled: Chrome.period-keys && (Chrome.page == AppPage.month || Chrome.page == AppPage.week);
+            activated => {
+                if (Chrome.page == AppPage.week) {
+                    Motion.focus-week-row(true);
+                } else {
+                    Motion.focus-row(true);
+                }
+            }
+        }
+        KeyBinding {
+            keys: @keys(Return);
+            enabled: Chrome.period-keys && (Chrome.page == AppPage.month || Chrome.page == AppPage.week);
+            activated => {
+                Chrome.activate();
+            }
+        }
+        KeyBinding {
+            keys: @keys(PageUp);
+            enabled: Chrome.period-keys;
+            activated => {
+                Motion.page(false);
+            }
+        }
+        KeyBinding {
+            keys: @keys(PageDown);
+            enabled: Chrome.period-keys;
+            activated => {
+                Motion.page(true);
+            }
         }
 
         // Keep interactive chrome in the OS safe area (status bar / gesture inset).

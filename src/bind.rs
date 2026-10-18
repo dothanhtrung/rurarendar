@@ -1,4 +1,7 @@
-use crate::calendar::CivilDate;
+use crate::calendar::{
+    days_in_month,
+    CivilDate,
+};
 use crate::editor::{
     apply_stored_action,
     delete_listed_event,
@@ -66,11 +69,7 @@ pub fn wire(
         ui.global::<Calendar>().on_prev_period(move || {
             let ui = ui_weak.unwrap();
             let mut state = state.borrow_mut();
-            state.selected = match ui.global::<Chrome>().get_page() {
-                AppPage::Week => state.selected.saturating_add_days(-7),
-                AppPage::Day => state.selected.saturating_add_days(-1),
-                _ => state.selected.saturating_add_months(-1),
-            };
+            shift_period(&mut state, ui.global::<Chrome>().get_page(), -1);
             refresh(&ui, &mut state);
         });
     }
@@ -80,12 +79,38 @@ pub fn wire(
         ui.global::<Calendar>().on_next_period(move || {
             let ui = ui_weak.unwrap();
             let mut state = state.borrow_mut();
-            state.selected = match ui.global::<Chrome>().get_page() {
-                AppPage::Week => state.selected.saturating_add_days(7),
-                AppPage::Day => state.selected.saturating_add_days(1),
-                _ => state.selected.saturating_add_months(1),
-            };
+            shift_period(&mut state, ui.global::<Chrome>().get_page(), 1);
             refresh(&ui, &mut state);
+        });
+    }
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        ui.global::<Calendar>().on_step_day(move |delta| {
+            if delta == 0 {
+                return false;
+            }
+            let ui = ui_weak.unwrap();
+            let mut state = state.borrow_mut();
+            let from = state.selected;
+            let to = from.saturating_add_days(i64::from(delta));
+            if to == from {
+                return false;
+            }
+            let page = ui.global::<Chrome>().get_page();
+            let slide = if page == AppPage::Month {
+                let stays = CivilDate::in_month_grid(state.shown_year, state.shown_month, to);
+                if !stays {
+                    state.shown_year = to.year();
+                    state.shown_month = to.month();
+                }
+                !stays
+            } else {
+                focus_page_changed(page, from, to)
+            };
+            state.selected = to;
+            refresh(&ui, &mut state);
+            slide
         });
     }
     {
@@ -688,6 +713,30 @@ fn apply_sync_event(ui: &AppWindow, state: &Rc<RefCell<AppState>>, ev: SyncEvent
     }
 }
 
+fn shift_period(state: &mut AppState, page: AppPage, dir: i32) {
+    match page {
+        AppPage::Week => state.selected = state.selected.saturating_add_days(i64::from(dir) * 7),
+        AppPage::Day => state.selected = state.selected.saturating_add_days(i64::from(dir)),
+        _ => {
+            let day = state.selected.day().min(days_in_month(state.shown_year, state.shown_month).max(1));
+            let base = CivilDate::from_ymd_in_range(state.shown_year, state.shown_month, day).unwrap_or(state.selected);
+            let next = base.saturating_add_months(dir);
+            state.shown_year = next.year();
+            state.shown_month = next.month();
+            state.selected = next;
+        }
+    }
+}
+
+/// True when `to` is no longer on the day or week page `from` is showing.
+fn focus_page_changed(page: AppPage, from: CivilDate, to: CivilDate) -> bool {
+    match page {
+        AppPage::Day => from != to,
+        AppPage::Week => from.monday_of_week() != to.monday_of_week(),
+        _ => from.year() != to.year() || from.month() != to.month(),
+    }
+}
+
 fn write_ppm(path: &str, width: u32, height: u32, rgba: &[u8]) -> std::io::Result<()> {
     let mut file = std::fs::File::create(path)?;
     write!(file, "P6\n{width} {height}\n255\n")?;
@@ -695,4 +744,38 @@ fn write_ppm(path: &str, width: u32, height: u32, rgba: &[u8]) -> std::io::Resul
         file.write_all(&pixel[..3])?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn date(year: i32, month: u8, day: u8) -> CivilDate {
+        CivilDate::new(year, month, day).unwrap()
+    }
+
+    #[test]
+    fn day_step_slides_only_when_the_visible_page_changes() {
+        let monday = date(2026, 10, 15).monday_of_week();
+        let sunday = monday.saturating_add_days(6);
+        let next_monday = monday.saturating_add_days(7);
+
+        assert!(!focus_page_changed(AppPage::Week, monday, sunday));
+        assert!(focus_page_changed(AppPage::Week, sunday, next_monday));
+        assert!(focus_page_changed(AppPage::Day, monday, monday.saturating_add_days(1)));
+        assert!(!focus_page_changed(AppPage::Day, monday, monday));
+    }
+
+    #[test]
+    fn month_row_stays_until_focus_leaves_the_grid() {
+        let grid = CivilDate::month_grid(2026, 10).unwrap();
+        let first = grid[0];
+        let below = grid[7];
+        assert_eq!(below, first.saturating_add_days(7));
+        assert!(CivilDate::in_month_grid(2026, 10, first));
+        assert!(CivilDate::in_month_grid(2026, 10, below));
+        assert!(CivilDate::in_month_grid(2026, 10, date(2026, 11, 1)));
+        assert!(!CivilDate::in_month_grid(2026, 10, first.saturating_add_days(-7)));
+        assert!(!CivilDate::in_month_grid(2026, 10, grid[41].saturating_add_days(7)));
+    }
 }
