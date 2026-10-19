@@ -164,6 +164,9 @@ pub struct Bundle {
     pub mode_dark: String,
     pub animations_label: String,
     pub animations_body: String,
+    pub holidays_title: String,
+    pub holidays_body: String,
+    pub holidays_label: String,
     pub switch_to_light: String,
     pub switch_to_dark: String,
     pub legend_holiday: String,
@@ -334,6 +337,9 @@ pub fn apply(ui: &AppWindow, pref: LocalePref, bundle: &Bundle) {
     g.set_mode_dark(s(&bundle.mode_dark));
     g.set_animations_label(s(&bundle.animations_label));
     g.set_animations_body(s(&bundle.animations_body));
+    g.set_holidays_title(s(&bundle.holidays_title));
+    g.set_holidays_body(s(&bundle.holidays_body));
+    g.set_holidays_label(s(&bundle.holidays_label));
     g.set_switch_to_light(s(&bundle.switch_to_light));
     g.set_switch_to_dark(s(&bundle.switch_to_dark));
     g.set_legend_holiday(s(&bundle.legend_holiday));

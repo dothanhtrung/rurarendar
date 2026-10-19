@@ -761,20 +761,22 @@ fn refresh_profiles(ui: &AppWindow, state: &AppState) {
     let rows: Vec<crate::ui::ProfileRow> = state
         .profiles
         .iter()
+        .filter(|profile| !profile.embedded)
         .map(|profile| crate::ui::ProfileRow {
             id: SharedString::from(profile.id.0.to_string()),
             name: SharedString::from(profile.name.as_str()),
             enabled: profile.enabled,
             active: profile.id == state.active_profile,
-            embedded: profile.embedded,
+            embedded: false,
             color: profile_color(&state.profiles, profile.id),
         })
         .collect();
-    let normal = state.profiles.iter().filter(|profile| !profile.embedded).count() as i32;
+    let normal = rows.len() as i32;
     let g = ui.global::<crate::ui::Profiles>();
     g.set_items(ModelRc::new(VecModel::from(rows)));
     g.set_active_id(SharedString::from(state.active_profile.0.to_string()));
     g.set_normal_count(normal);
+    g.set_embedded_enabled(state.profiles.iter().any(|profile| profile.embedded && profile.enabled));
 }
 
 fn refresh_feeds(ui: &AppWindow, state: &AppState) {

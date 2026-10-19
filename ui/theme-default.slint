@@ -80,7 +80,7 @@ export struct ProfileRow {
     name: string,
     enabled: bool,
     active: bool,
-    // Shipped assets catalog. It can be hidden, not deleted.
+    // Unused on listed rows; Settings owns the embedded catalog toggle.
     embedded: bool,
     // ProfileColor index. Negative when this row has no swatch.
     color: int,

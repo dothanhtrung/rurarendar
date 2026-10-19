@@ -1,6 +1,6 @@
 import { ScrollView } from "std-widgets.slint";
 import { Palette, Theme } from "theme-default.slint";
-import { Sync, Motion } from "demo-data.slint";
+import { Sync, Motion, Profiles } from "demo-data.slint";
 import { I18n } from "i18n.slint";
 import { Field, InkButton, SelectField, CheckRow } from "widgets.slint";
 
@@ -237,12 +237,38 @@ export component SettingsView inherits Rectangle {
                                 Motion.save-enabled();
                             }
                         }
-                        // Text {
-                        //     text: I18n.animations-body;
-                        //     color: Palette.text-secondary;
-                        //     font-size: 0.85rem;
-                        //     wrap: word-wrap;
-                        // }
+                    }
+                }
+
+                Rectangle {
+                    background: Palette.bg-panel;
+                    border-radius: Palette.radius;
+                    border-width: 1px;
+                    border-color: Palette.border;
+                    VerticalLayout {
+                        padding: 20px;
+                        spacing: 12px;
+                        Text {
+                            text: I18n.holidays-title;
+                            font-weight: 700;
+                            font-size: 1rem;
+                            color: Palette.text-primary;
+                        }
+
+                        Text {
+                            text: I18n.holidays-body;
+                            color: Palette.text-secondary;
+                            font-size: 0.9rem;
+                            wrap: word-wrap;
+                        }
+
+                        CheckRow {
+                            label: I18n.holidays-label;
+                            checked <=> Profiles.embedded-enabled;
+                            toggled => {
+                                Profiles.toggle-embedded();
+                            }
+                        }
                     }
                 }
 

@@ -162,12 +162,15 @@ export global Profiles {
     in-out property <[ProfileRow]> items;
     in-out property <string> active-id;
     in-out property <int> normal-count: 1;
+    // Bundled Vietnam catalog. Settings owns this switch; the sidebar never lists it.
+    in-out property <bool> embedded-enabled: true;
     in-out property <string> sheet-title;
     in-out property <string> sheet-name;
     in-out property <string> sheet-path;
     in-out property <bool> sheet-import: false;
     in-out property <string> sheet-error;
     callback toggle(string);
+    callback toggle-embedded();
     callback select(string);
     callback delete(string);
     callback open-create();

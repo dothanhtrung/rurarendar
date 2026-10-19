@@ -330,17 +330,30 @@ pub fn wire(
             let Some(pid) = crate::profile::ProfileId::parse(id.as_str()) else {
                 return;
             };
-            if let Some(profile) = state.profiles.iter_mut().find(|profile| profile.id == pid) {
+            if let Some(profile) = state.profiles.iter_mut().find(|profile| profile.id == pid && !profile.embedded) {
                 profile.enabled = !profile.enabled;
                 let snapshot = profile.clone();
                 let _ = sync_tx.send(SyncCmd::UpsertProfile(snapshot));
             }
-            if !state.profiles.iter().any(|profile| profile.enabled && profile.id == state.active_profile) {
-                if let Some(next_id) = state.profiles.iter().find(|profile| profile.enabled).map(|profile| profile.id) {
-                    state.active_profile = next_id;
-                    let _ = sync_tx.send(SyncCmd::SetActiveProfile(next_id));
-                }
+            activate_ordinary_if_needed(&mut state, &sync_tx);
+            let _ = state.reload_catalogs();
+            refresh(&ui, &mut state);
+        });
+    }
+    {
+        let ui_weak = ui.as_weak();
+        let state = state.clone();
+        let sync_tx = sync_tx.clone();
+        ui.global::<Profiles>().on_toggle_embedded(move || {
+            let ui = ui_weak.unwrap();
+            let enabled = ui.global::<Profiles>().get_embedded_enabled();
+            let mut state = state.borrow_mut();
+            if let Some(profile) = state.profiles.iter_mut().find(|profile| profile.embedded) {
+                profile.enabled = enabled;
+                let snapshot = profile.clone();
+                let _ = sync_tx.send(SyncCmd::UpsertProfile(snapshot));
             }
+            activate_ordinary_if_needed(&mut state, &sync_tx);
             let _ = state.reload_catalogs();
             refresh(&ui, &mut state);
         });
@@ -355,7 +368,7 @@ pub fn wire(
             let Some(pid) = crate::profile::ProfileId::parse(id.as_str()) else {
                 return;
             };
-            let snapshot = state.profiles.iter_mut().find(|profile| profile.id == pid).map(|profile| {
+            let snapshot = state.profiles.iter_mut().find(|profile| profile.id == pid && !profile.embedded).map(|profile| {
                 profile.enabled = true;
                 profile.clone()
             });
@@ -646,6 +659,29 @@ pub fn wire(
     }
 
     (sync_timer, pull_timer, notification_timer)
+}
+
+fn activate_ordinary_if_needed(state: &mut AppState, sync_tx: &UnboundedSender<SyncCmd>) {
+    let active_ok = state.profiles.iter().any(|profile| {
+        profile.id == state.active_profile && !profile.embedded && profile.enabled
+    });
+    if active_ok {
+        return;
+    }
+    let Some(next_id) = state
+        .profiles
+        .iter()
+        .find(|profile| !profile.embedded && profile.enabled)
+        .or_else(|| state.profiles.iter().find(|profile| !profile.embedded))
+        .map(|profile| profile.id)
+    else {
+        return;
+    };
+    if next_id == state.active_profile {
+        return;
+    }
+    state.active_profile = next_id;
+    let _ = sync_tx.send(SyncCmd::SetActiveProfile(next_id));
 }
 
 fn apply_sync_event(ui: &AppWindow, state: &Rc<RefCell<AppState>>, ev: SyncEvent) {

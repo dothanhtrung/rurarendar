@@ -15,6 +15,7 @@ component AgendaEvent inherits Rectangle {
     callback clicked();
     callback delete();
 
+    width: 100%;
     min-width: 0px;
     min-height: 52px;
     opacity: root.enabled ? 1 : 0.45;
@@ -22,43 +23,50 @@ component AgendaEvent inherits Rectangle {
     background: body.has-hover ? Palette.bg-hover : transparent;
 
     HorizontalLayout {
+        width: 100%;
         padding: 8px;
         spacing: 12px;
-        alignment: center;
+        alignment: space-between;
 
-        Rectangle {
-            width: 4px;
-            height: 28px;
-            border-radius: 2px;
-            background: root.mark-index >= 0 ? ProfileColor.at(root.mark-index) : root.holiday ? Palette.mark-holiday : Palette.mark-event;
-        }
-
-        body := TouchArea {
+        HorizontalLayout {
+            spacing: 12px;
             horizontal-stretch: 1;
             min-width: 0px;
-            mouse-cursor: pointer;
-            clicked => {
-                root.clicked();
+            Rectangle {
+                width: 4px;
+                height: 28px;
+                border-radius: 2px;
+                background: root.mark-index >= 0 ? ProfileColor.at(root.mark-index) : root.holiday ? Palette.mark-holiday : Palette.mark-event;
             }
-            VerticalLayout {
-                alignment: center;
-                spacing: 2px;
-                Text {
-                    text: root.title;
-                    color: Palette.text-primary;
-                    font-size: 0.95rem;
-                    font-weight: 600;
-                    overflow: elide;
-                    min-width: 0px;
-                    horizontal-stretch: 1;
+
+            body := TouchArea {
+                horizontal-stretch: 1;
+                min-width: 0px;
+                mouse-cursor: pointer;
+                clicked => {
+                    root.clicked();
                 }
-                Text {
-                    text: root.time;
-                    color: Palette.text-muted;
-                    font-size: 0.8rem;
-                    overflow: elide;
-                    min-width: 0px;
-                    horizontal-stretch: 1;
+                VerticalLayout {
+                    alignment: start;
+                    spacing: 2px;
+                    width: 100%;
+                    Text {
+                        text: root.title;
+                        color: Palette.text-primary;
+                        font-size: 0.95rem;
+                        font-weight: 600;
+                        overflow: elide;
+                        min-width: 0px;
+                        width: 100%;
+                    }
+                    Text {
+                        text: root.time;
+                        color: Palette.text-muted;
+                        font-size: 0.8rem;
+                        overflow: elide;
+                        min-width: 0px;
+                        width: 100%;
+                    }
                 }
             }
         }
@@ -93,13 +101,17 @@ component AgendaEvent inherits Rectangle {
 
 component AgendaBody inherits VerticalLayout {
     in property <[AgendaRow]> rows;
+    width: 100%;
     spacing: 2px;
 
     for row[idx] in root.rows: VerticalLayout {
+        width: 100%;
         if (row.header): HorizontalLayout {
+            width: 100%;
             height: 36px;
             padding-left: 12px;
             padding-right: 12px;
+            alignment: space-between;
             Text {
                 text: row.today ? (I18n.today + " · " + root.rows[idx].title) : root.rows[idx].title;
                 color: row.today ? Palette.mark-today : Palette.text-secondary;
@@ -134,6 +146,11 @@ component AgendaBody inherits VerticalLayout {
 
 export component EventListView inherits Rectangle {
     background: Palette.bg-app;
+    vertical-stretch: 1;
+    horizontal-stretch: 1;
+    min-width: 0px;
+    min-height: 0px;
+    clip: true;
 
     ScrollView {
         width: 100%;
@@ -142,14 +159,14 @@ export component EventListView inherits Rectangle {
 
         HorizontalLayout {
             width: max(root.width, 1px);
-            alignment: center;
+            alignment: stretch;
             padding-top: Chrome.phone ? 12px : 24px;
             padding-bottom: 32px;
             padding-left: 16px;
             padding-right: 16px;
 
             VerticalLayout {
-                width: min(720px, max(root.width - 32px, 280px));
+                width: 100%;
                 spacing: 8px;
                 alignment: start;
 
