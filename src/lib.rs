@@ -13,6 +13,7 @@ mod bind;
 mod config;
 mod editor;
 mod notifications;
+mod secrets;
 mod state;
 mod ui;
 mod view;

@@ -163,16 +163,13 @@ async fn worker(
                         session = sess;
                         let _ = events.send(ready_event(&config, session.is_some()));
                         if let Some(sess) = session.as_mut() {
-                            match resume_rotation(&pool, &mut config, &config_path, sess).await {
-                                Ok(()) => {
-                                    if let Ok(store) = store::load_events(&pool).await {
-                                        let _ = events.send(SyncEvent::Events(store));
-                                    }
-                                    let _ = events.send(SyncEvent::Status("Đã cập nhật khoá mã hoá.".into()));
-                                }
-                                Err(e) => {
-                                    let _ = events.send(SyncEvent::Error(e.to_string()));
-                                }
+                            if let Err(e) = resume_rotation(&pool, &mut config, &config_path, sess).await {
+                                let _ = events.send(SyncEvent::Error(e.to_string()));
+                            } else if let Err(e) = sync_round(&pool, &mut config, &config_path, sess).await {
+                                let _ = events.send(SyncEvent::Error(e.to_string()));
+                            } else if let Ok(store) = store::load_events(&pool).await {
+                                let _ = events.send(SyncEvent::Events(store));
+                                let _ = events.send(SyncEvent::Status("Đã cập nhật khoá mã hoá.".into()));
                             }
                         } else {
                             let _ = events.send(SyncEvent::Status(
@@ -378,7 +375,7 @@ fn ready_event(config: &Config, connected: bool) -> SyncEvent {
         },
         username: config.username.clone(),
         token: config.token.clone(),
-        encrypt_key: config.encrypt_key.clone(),
+        encrypt_key: crate::secrets::load().map(|p| p.current).unwrap_or_default(),
         connected,
     }
 }
@@ -422,8 +419,9 @@ fn session_from_store(
     username: String,
     token: String,
 ) -> anyhow::Result<Session> {
-    let pass = config.encrypt_key.clone();
-    let old_pass = config.old_encrypt_key.clone().unwrap_or_default();
+    let stored = crate::secrets::load()?;
+    let pass = stored.current.clone();
+    let old_pass = stored.old.clone().unwrap_or_default();
     let key_revision = if pass.is_empty() { 0 } else { config.key_revision.max(1) };
     let key = if pass.is_empty() {
         None
@@ -468,24 +466,24 @@ fn set_encrypt_key(
     session: Option<&Session>,
     new_pass: &str,
 ) -> anyhow::Result<Option<Session>> {
-    let old_pass = config.encrypt_key.clone();
+    let stored = crate::secrets::load()?;
+    let old_pass = stored.current.clone();
     if old_pass == new_pass {
         return Ok(match session {
             Some(session) => Some(session.clone()),
             None => restore_session(config, config_path),
         });
     }
-    if let Some(pending_old) = &config.old_encrypt_key
+    if let Some(pending_old) = &stored.old
         && !pending_old.is_empty()
         && pending_old != &old_pass
-        && old_pass != new_pass
     {
         anyhow::bail!("Còn dữ liệu chưa mã hoá lại bằng khoá trước. Đồng bộ xong rồi hãy đổi khoá.");
     }
-    if old_pass != new_pass {
-        config.old_encrypt_key = Some(old_pass);
-    }
-    config.encrypt_key = new_pass.to_string();
+    crate::secrets::store(&crate::secrets::Passphrase {
+        current: new_pass.to_string(),
+        old: Some(old_pass),
+    })?;
     config.key_revision = if new_pass.is_empty() {
         0
     } else {
@@ -518,17 +516,17 @@ async fn resume_rotation(
     config_path: &Path,
     sess: &mut Session,
 ) -> anyhow::Result<()> {
-    let Some(old_pass) = config.old_encrypt_key.clone() else {
+    let stored = crate::secrets::load()?;
+    let Some(old_pass) = stored.old.clone() else {
         return Ok(());
     };
-    if old_pass == config.encrypt_key {
-        config.old_encrypt_key = None;
-        config.save(config_path)?;
+    if old_pass == stored.current {
+        crate::secrets::clear_old()?;
         sess.old_key = None;
         return Ok(());
     }
     rotate_server_items(pool, config, config_path, sess).await?;
-    if config.old_encrypt_key.is_none() {
+    if crate::secrets::load()?.old.is_none() {
         sess.old_key = None;
     }
     Ok(())
@@ -593,8 +591,7 @@ async fn rotate_server_items(
         }
     }
     if leftover == 0 {
-        config.old_encrypt_key = None;
-        config.save(config_path)?;
+        crate::secrets::clear_old()?;
     }
     Ok(())
 }

@@ -8,8 +8,6 @@
     server_url: "http://127.0.0.1:8080",
     username: "",
     token: "",
-    encrypt_key: "",
-    old_encrypt_key: None,
     key_revision: 0,
     kdf_salt: "",
     pull_cursor: "",

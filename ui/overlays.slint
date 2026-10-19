@@ -197,6 +197,7 @@ export component DayListPopup inherits Rectangle {
                 vertical-stretch: 1;
                 min-width: 0px;
                 min-height: 0px;
+                width: 100%;
                 preferred-height: list.preferred-height;
                 max-height: list.preferred-height;
                 interactive: true;
@@ -206,6 +207,7 @@ export component DayListPopup inherits Rectangle {
                     width: parent.width;
                     spacing: 2px;
                     for item[idx] in Calendar.day-popup-items: EventRow {
+                        width: parent.width;
                         time: item.time;
                         title: item.title;
                         mark-index: item.color;

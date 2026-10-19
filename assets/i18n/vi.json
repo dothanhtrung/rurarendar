@@ -53,7 +53,7 @@
   "save_and_sync": "Lưu và đồng bộ",
   "sync_now": "Đồng bộ ngay",
   "encrypt_title": "Khoá mã hoá",
-  "encrypt_body": "Để trống nếu không mã hoá nội dung trên server. Đổi khoá: máy sẽ tải dữ liệu, giải mã bằng khoá cũ, mã hoá lại rồi đẩy lên. Khoá cũ được giữ trên máy cho đến khi mọi bản ghi trên server đã mã hoá lại (kể cả khi mất mạng giữa chừng). Server không bao giờ nhận khoá này.",
+  "encrypt_body": "Để trống nếu không mã hoá nội dung trên server. Khoá được lưu trong keyring của máy (Linux: Secret Service / GNOME Keyring / KWallet; Android: Keystore), không ghi vào file cấu hình. Đổi khoá: máy sẽ tải dữ liệu, giải mã bằng khoá cũ, mã hoá lại rồi ghi đè bản mã hoá trên server. Khoá cũ được giữ trên máy cho đến khi mọi bản ghi đã mã hoá lại. Server không bao giờ nhận khoá này.",
   "encrypt_key": "Khoá mã hoá",
   "save_key": "Lưu khoá",
   "reminders_title": "Thông báo",

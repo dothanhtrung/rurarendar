@@ -53,7 +53,7 @@
   "save_and_sync": "Save and sync",
   "sync_now": "Sync now",
   "encrypt_title": "Encryption key",
-  "encrypt_body": "Empty means no encrypt",
+  "encrypt_body": "Empty means no encryption",
   "encrypt_key": "Encryption key",
   "save_key": "Save key",
   "reminders_title": "Alerts",

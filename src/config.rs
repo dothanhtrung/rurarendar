@@ -125,8 +125,11 @@ pub struct Config {
     pub server_url: String,
     pub username: String,
     pub token: String,
+    /// Deserialize-only. Old files may still contain this; `load` moves it to the device keyring.
+    #[serde(default, skip_serializing)]
     pub encrypt_key: String,
-    /// `None` means no key rotation is in progress. `Some("")` means the previous data was plaintext.
+    /// Deserialize-only. `None` means no rotation. `Some("")` means the previous data was plaintext.
+    #[serde(default, skip_serializing)]
     pub old_encrypt_key: Option<String>,
     pub key_revision: i32,
     pub kdf_salt: String,
@@ -163,7 +166,27 @@ impl Config {
         }
         let text = std::fs::read_to_string(config_path)
             .with_context(|| format!("Could not read {}", config_path.display()))?;
-        ron::from_str(&text).with_context(|| format!("Invalid config in {}", config_path.display()))
+        let mut config: Self =
+            ron::from_str(&text).with_context(|| format!("Invalid config in {}", config_path.display()))?;
+        if config.migrate_passphrase()? {
+            config.save(config_path)?;
+        }
+        Ok(config)
+    }
+
+    /// Copy a passphrase that still lives in this file into the OS keyring, then drop it here.
+    /// Fails without rewriting the file if the keyring write fails, so the passphrase is not lost.
+    fn migrate_passphrase(&mut self) -> anyhow::Result<bool> {
+        if self.encrypt_key.is_empty() && self.old_encrypt_key.is_none() {
+            return Ok(false);
+        }
+        crate::secrets::store(&crate::secrets::Passphrase {
+            current: self.encrypt_key.clone(),
+            old: self.old_encrypt_key.clone(),
+        })?;
+        self.encrypt_key.clear();
+        self.old_encrypt_key = None;
+        Ok(true)
     }
 
     pub fn save(&self, config_path: &Path) -> anyhow::Result<()> {
@@ -227,13 +250,47 @@ mod tests {
         config.old_encrypt_key = Some(String::new());
         config.active_profile = 3;
         config.save(&path).unwrap();
+        let saved = std::fs::read_to_string(&path).unwrap();
+        assert!(!saved.contains("encrypt_key"), "passphrase must not be written to the config file");
+        assert!(!saved.contains("old_encrypt_key"));
 
         let again = Config::load(&path).unwrap();
         assert_eq!(again.ui_locale, "vi");
         assert!(!again.animations);
-        assert_eq!(again.encrypt_key, "secret");
-        assert_eq!(again.old_encrypt_key.as_deref(), Some(""));
+        assert!(again.encrypt_key.is_empty());
+        assert!(again.old_encrypt_key.is_none());
         assert_eq!(again.active_profile, 3);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn passphrase_in_old_file_moves_to_the_keyring() {
+        let _ = crate::secrets::delete();
+        let path = std::env::temp_dir().join(format!("rurarendar-config-migrate-{}.ron", std::process::id()));
+        std::fs::write(
+            &path,
+            r#"(
+    db: "sqlite::memory:",
+    encrypt_key: "secret",
+    old_encrypt_key: Some(""),
+    key_revision: 2,
+    kdf_salt: "abc",
+)
+"#,
+        )
+        .unwrap();
+        let config = Config::load(&path).unwrap();
+        assert!(config.encrypt_key.is_empty());
+        assert!(config.old_encrypt_key.is_none());
+        assert_eq!(config.key_revision, 2);
+        assert_eq!(config.kdf_salt, "abc");
+        let stored = crate::secrets::load().unwrap();
+        assert_eq!(stored.current, "secret");
+        assert_eq!(stored.old.as_deref(), Some(""));
+        let saved = std::fs::read_to_string(&path).unwrap();
+        assert!(!saved.contains("encrypt_key"));
+        assert!(!saved.contains("old_encrypt_key"));
+        let _ = crate::secrets::delete();
         let _ = std::fs::remove_file(&path);
     }
 

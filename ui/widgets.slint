@@ -679,75 +679,55 @@ export component EventRow inherits Rectangle {
     callback delete();
     min-width: 0px;
     min-height: 48px;
-    clip: true;
     opacity: root.enabled ? 1 : 0.45;
     border-radius: Palette.radius-sm;
-    background: ta.has-hover || body-ta.has-hover ? Palette.bg-hover : transparent;
+    background: body.has-hover ? Palette.bg-hover : transparent;
     Rectangle {
         border-radius: parent.border-radius;
         background: Palette.accent;
-        opacity: ta.pressed || body-ta.pressed ? 0.18 : 0;
+        opacity: body.pressed ? 0.18 : 0;
         animate opacity { duration: 120ms; easing: ease-out; }
-    }
-    ta := TouchArea {
-        mouse-cursor: pointer;
-        clicked => {
-            root.clicked();
-        }
     }
 
     HorizontalLayout {
         padding: 8px;
         spacing: 12px;
-        alignment: space-between;
-        cross-axis-alignment: center;
+        alignment: center;
         min-width: 0px;
 
-        Flickable {
+        Rectangle {
+            width: 4px;
+            height: 28px;
+            border-radius: 2px;
+            background: mark;
+        }
+
+        body := TouchArea {
             horizontal-stretch: 1;
             min-width: 0px;
-            min-height: 32px;
-            interactive: true;
-            content-height: self.height;
-            content-width: max(body.preferred-width, self.width);
-            body := Rectangle {
-                x: 0px;
-                y: 0px;
-                height: 100%;
-                width: max(inner.preferred-width, parent.width);
-                body-ta := TouchArea {
-                    mouse-cursor: pointer;
-                    clicked => {
-                        root.clicked();
-                    }
+            mouse-cursor: pointer;
+            clicked => {
+                root.clicked();
+            }
+            VerticalLayout {
+                alignment: center;
+                spacing: 2px;
+                Text {
+                    text: root.title;
+                    color: Palette.text-primary;
+                    font-size: 0.95rem;
+                    font-weight: 600;
+                    overflow: elide;
+                    min-width: 0px;
+                    horizontal-stretch: 1;
                 }
-                inner := HorizontalLayout {
-                    alignment: start;
-                    padding: 8px;
-                    spacing: 12px;
-
-                    Rectangle {
-                        width: 4px;
-                        height: 28px;
-                        border-radius: 2px;
-                        background: mark;
-                    }
-
-                    VerticalLayout {
-                        alignment: center;
-                        Text {
-                            text: title;
-                            color: Palette.text-primary;
-                            font-size: 0.95rem;
-                            font-weight: 600;
-                        }
-
-                        Text {
-                            text: time;
-                            color: Palette.text-muted;
-                            font-size: 0.8rem;
-                        }
-                    }
+                Text {
+                    text: root.time;
+                    color: Palette.text-muted;
+                    font-size: 0.8rem;
+                    overflow: elide;
+                    min-width: 0px;
+                    horizontal-stretch: 1;
                 }
             }
         }
