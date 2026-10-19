@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Icon=rurarendar
+Comment=Lunar Calendar
+Terminal=false
+Categories=Applications;
+Name=Rurarendar
+Exec=rurarendar
