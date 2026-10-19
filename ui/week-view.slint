@@ -1,7 +1,7 @@
 import { ScrollView } from "std-widgets.slint";
 import { Palette, ProfileColor, TimedEvent, AppPage } from "theme-default.slint";
 import { Calendar, Chrome } from "demo-data.slint";
-import { PeriodGesture, DateTouchArea } from "widgets.slint";
+import { PeriodGesture, DateTouchArea, SourceMark } from "widgets.slint";
 
 component WeekBlock inherits Rectangle {
     in property <TimedEvent> ev;
@@ -143,23 +143,17 @@ export component WeekView inherits Rectangle {
                             alignment: center;
                             spacing: 3px;
                             height: 8px;
-                            if (Calendar.week-days[d].mark0 >= 0): Rectangle {
-                                width: 6px;
-                                height: 6px;
-                                border-radius: 3px;
-                                background: ProfileColor.at(Calendar.week-days[d].mark0);
+                            if (Calendar.week-days[d].mark0 >= 0): SourceMark {
+                                index: Calendar.week-days[d].mark0;
+                                size: 6px;
                             }
-                            if (Calendar.week-days[d].mark1 >= 0): Rectangle {
-                                width: 6px;
-                                height: 6px;
-                                border-radius: 3px;
-                                background: ProfileColor.at(Calendar.week-days[d].mark1);
+                            if (Calendar.week-days[d].mark1 >= 0): SourceMark {
+                                index: Calendar.week-days[d].mark1;
+                                size: 6px;
                             }
-                            if (Calendar.week-days[d].mark2 >= 0): Rectangle {
-                                width: 6px;
-                                height: 6px;
-                                border-radius: 3px;
-                                background: ProfileColor.at(Calendar.week-days[d].mark2);
+                            if (Calendar.week-days[d].mark2 >= 0): SourceMark {
+                                index: Calendar.week-days[d].mark2;
+                                size: 6px;
                             }
                         }
                     }

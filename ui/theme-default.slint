@@ -29,7 +29,7 @@ export struct DayCellData {
     tiet-khi-time: string,
     has-event: bool,
     title: string,
-    // Profile palette indexes on this day, in first-seen order. -1 is an empty slot.
+    // Profile (0-7) and iCal (8-15) palette indexes on this day, in first-seen order. -1 is empty.
     mark0: int,
     mark1: int,
     mark2: int,
@@ -44,7 +44,7 @@ export struct TimedEvent {
     // Empty for blocks that are not a stored user event.
     id: string,
     enabled: bool,
-    // ProfileColor index. Negative: not a profile event.
+    // ProfileColor index. Negative: not a profile or iCal event.
     color: int,
 }
 
@@ -54,7 +54,7 @@ export struct DayEvent {
     // Empty for holidays and other rows that cannot be edited.
     id: string,
     enabled: bool,
-    // ProfileColor index. -2 keeps the holiday mark; -1 is the generic event mark.
+    // ProfileColor index. -2 keeps the catalog holiday mark; >= 0 is a profile or iCal.
     color: int,
 }
 
@@ -71,7 +71,7 @@ export struct AgendaRow {
     month: int,
     day: int,
     today: bool,
-    // ProfileColor index. Negative when this row is a header, holiday, or feed.
+    // ProfileColor index. Negative when this row is a header or catalog holiday.
     color: int,
 }
 
@@ -82,7 +82,7 @@ export struct ProfileRow {
     active: bool,
     // Shipped assets catalog. It can be hidden, not deleted.
     embedded: bool,
-    // ProfileColor index. Negative for a row that is not a profile (a feed).
+    // ProfileColor index. Negative when this row has no swatch.
     color: int,
 }
 
@@ -445,10 +445,10 @@ export global Palette {
     out property <string> font-display: Theme.scheme-index == 2 ? "Noto Sans" : "Noto Serif";
 }
 
-// One swatch per profile, in sidebar order. Dark enough for light text on a week block,
-// and distinct on both cream cells and the dark sidebar. Keep the length in step with
-// PROFILE_COLOR_COUNT in view.rs.
+// Swatches for profiles (0-7) and iCal feeds (8-15), in sidebar order. Dark enough for
+// light text on a week block. Keep feed-base in step with FEED_COLOR_BASE in view.rs.
 export global ProfileColor {
+    out property <int> feed-base: 8;
     out property <[color]> hues: [
         #1B6B72,
         #B4531A,
@@ -458,6 +458,14 @@ export global ProfileColor {
         #8A5A12,
         #A3324E,
         #35597A,
+        #0E7490,
+        #C2410C,
+        #1D4ED8,
+        #86198F,
+        #3F6212,
+        #A16207,
+        #9F1239,
+        #164E63,
     ];
 
     pure public function at(index: int) -> brush {

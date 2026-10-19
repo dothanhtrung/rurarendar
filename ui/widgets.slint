@@ -1,6 +1,16 @@
 import { Palette, ProfileColor, DayCellData, ProfileRow } from "theme-default.slint";
 import { Calendar, Chrome, Motion } from "demo-data.slint";
 
+// Round for a profile, square for an iCal feed. Hidden callers wrap with `if (index >= 0)`.
+export component SourceMark inherits Rectangle {
+    in property <int> index: -1;
+    in property <length> size: 7px;
+    width: size;
+    height: size;
+    border-radius: index >= ProfileColor.feed-base ? 2px : size / 2;
+    background: ProfileColor.at(index);
+}
+
 // Tracks one PopupWindow for the Android back gesture. `changed` only accepts a local name.
 export component PopupWatch inherits Rectangle {
     in property <bool> open;
@@ -241,11 +251,9 @@ export component ProfileNavRow inherits Rectangle {
             }
         }
 
-        if (data.color >= 0): Rectangle {
-            width: 8px;
-            height: 8px;
-            border-radius: 4px;
-            background: ProfileColor.at(data.color);
+        if (data.color >= 0): SourceMark {
+            index: data.color;
+            size: 8px;
         }
 
         Text {
@@ -421,7 +429,7 @@ export component DateCell inherits Rectangle {
             HorizontalLayout {
                 spacing: 4px;
                 alignment: center;
-                if (data.holiday): Rectangle {
+                if (data.holiday && data.mark0 < 0): Rectangle {
                     width: 7px;
                     height: 7px;
                     border-radius: 4px;
@@ -432,23 +440,14 @@ export component DateCell inherits Rectangle {
                     height: 7px;
                     background: Palette.mark-tiet-khi;
                 }
-                if (data.mark0 >= 0): Rectangle {
-                    width: 7px;
-                    height: 7px;
-                    border-radius: 4px;
-                    background: ProfileColor.at(data.mark0);
+                if (data.mark0 >= 0): SourceMark {
+                    index: data.mark0;
                 }
-                if (data.mark1 >= 0): Rectangle {
-                    width: 7px;
-                    height: 7px;
-                    border-radius: 4px;
-                    background: ProfileColor.at(data.mark1);
+                if (data.mark1 >= 0): SourceMark {
+                    index: data.mark1;
                 }
-                if (data.mark2 >= 0): Rectangle {
-                    width: 7px;
-                    height: 7px;
-                    border-radius: 4px;
-                    background: ProfileColor.at(data.mark2);
+                if (data.mark2 >= 0): SourceMark {
+                    index: data.mark2;
                 }
             }
         }

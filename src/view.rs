@@ -32,7 +32,6 @@ use crate::event::{
     Occurrence,
 };
 use crate::ical::{
-    events_on,
     IcalEvent,
     IcalFeed,
 };
@@ -146,9 +145,10 @@ pub fn cell_from_date(
     }
 }
 
-/// Same length as `ProfileColor.hues` in the UI. Sidebar order, then it wraps.
+/// Profiles wrap in 0..8. iCal feeds wrap in 8..16. Matches ProfileColor.hues.
 const PROFILE_COLOR_COUNT: i32 = 8;
-/// Day and popup rows use this so a holiday or feed keeps the holiday mark.
+const FEED_COLOR_BASE: i32 = 8;
+/// Day and popup rows use this so a catalog holiday keeps the holiday mark.
 const HOLIDAY_COLOR: i32 = -2;
 
 /// Palette slot for a profile, matching the sidebar list. An event with no profile uses the first slot.
@@ -160,19 +160,67 @@ fn profile_color(profiles: &[Profile], id: ProfileId) -> i32 {
         .unwrap_or(0)
 }
 
+/// Palette slot for an iCal feed, matching the sidebar list, in the feed bank (8-15).
+fn feed_color(feeds: &[IcalFeed], id: i64) -> i32 {
+    feeds
+        .iter()
+        .position(|feed| feed.id == id)
+        .map(|index| FEED_COLOR_BASE + ((index as i32) % PROFILE_COLOR_COUNT))
+        .unwrap_or(FEED_COLOR_BASE)
+}
+
+/// Color of the catalog that paints holidays: the embedded profile, else any enabled catalog.
+fn catalog_color(profiles: &[Profile]) -> i32 {
+    let catalog = |profile: &&Profile| profile.enabled && profile.catalog_slug().is_some();
+    profiles
+        .iter()
+        .find(|profile| profile.embedded && catalog(profile))
+        .or_else(|| profiles.iter().find(catalog))
+        .map(|profile| profile_color(profiles, profile.id))
+        .unwrap_or(HOLIDAY_COLOR)
+}
+
+fn push_mark(cell: &mut DayCellData, color: i32) {
+    if color < 0 {
+        return;
+    }
+    if cell.mark0 == color || cell.mark1 == color || cell.mark2 == color {
+        return;
+    }
+    if cell.mark0 < 0 {
+        cell.mark0 = color;
+    } else if cell.mark1 < 0 {
+        cell.mark1 = color;
+    } else if cell.mark2 < 0 {
+        cell.mark2 = color;
+    }
+}
+
+fn overlay_catalog(cells: &mut [DayCellData], color: i32) {
+    if color < 0 {
+        return;
+    }
+    for cell in cells {
+        if cell.holiday {
+            push_mark(cell, color);
+        }
+    }
+}
+
 fn overlay_feeds(cells: &mut [DayCellData], feeds: &[IcalFeed]) {
     for cell in cells {
         let Ok(date) = CivilDate::new(cell.year, cell.month as u8, cell.gregorian as u8) else {
             continue;
         };
-        let Some(event) = events_on(feeds, date).into_iter().next() else {
-            continue;
-        };
-        let already = cell.holiday;
-        cell.holiday = true;
-        cell.has_event = true;
-        if !already && cell.title.is_empty() {
-            cell.title = SharedString::from(event.summary.as_str());
+        for feed in feeds.iter().filter(|feed| feed.enabled) {
+            let Some(event) = feed.events.iter().find(|event| event.covers(date)) else {
+                continue;
+            };
+            cell.has_event = true;
+            if cell.title.is_empty() {
+                cell.title = SharedString::from(event.summary.as_str());
+            }
+            push_mark(cell, feed_color(feeds, feed.id));
         }
     }
 }
@@ -182,22 +230,13 @@ fn overlay_events(cells: &mut [DayCellData], occs: &[Occurrence], profiles: &[Pr
         let Ok(date) = CivilDate::new(cell.year, cell.month as u8, cell.gregorian as u8) else {
             continue;
         };
-        let mut marks = [-1_i32; 3];
-        let mut count = 0;
         for occ in occs.iter().filter(|occ| occ.civil == date) {
             cell.has_event = true;
             if cell.title.is_empty() {
                 cell.title = SharedString::from(occ.title.as_str());
             }
-            let color = profile_color(profiles, occ.profile_id);
-            if count < marks.len() && !marks[..count].contains(&color) {
-                marks[count] = color;
-                count += 1;
-            }
+            push_mark(cell, profile_color(profiles, occ.profile_id));
         }
-        cell.mark0 = marks[0];
-        cell.mark1 = marks[1];
-        cell.mark2 = marks[2];
     }
 }
 
@@ -237,30 +276,33 @@ fn week_timed(week: &[CivilDate; 7], occs: &[Occurrence], profiles: &[Profile]) 
 fn feed_blocks(week: &[CivilDate; 7], feeds: &[IcalFeed]) -> Vec<TimedEvent> {
     let mut out = Vec::new();
     for (day, date) in week.iter().enumerate() {
-        for event in events_on(feeds, *date) {
-            if event.all_day {
-                continue;
+        for feed in feeds.iter().filter(|feed| feed.enabled) {
+            let color = feed_color(feeds, feed.id);
+            for event in feed.events.iter().filter(|event| event.covers(*date)) {
+                if event.all_day {
+                    continue;
+                }
+                let Some(start) = event.start_time else {
+                    continue;
+                };
+                let hours = event
+                    .end_time
+                    .map(|end| {
+                        let delta = (end.minutes_from_midnight() - start.minutes_from_midnight()) as f32 / 60.0;
+                        if delta > 0.0 { delta } else { 1.0 }
+                    })
+                    .unwrap_or(1.0);
+                out.push(TimedEvent {
+                    day: day as i32,
+                    start_hour: f32::from(start.hour) + f32::from(start.minute) / 60.0,
+                    hours,
+                    title: SharedString::from(event.summary.as_str()),
+                    holiday: false,
+                    id: SharedString::new(),
+                    enabled: true,
+                    color,
+                });
             }
-            let Some(start) = event.start_time else {
-                continue;
-            };
-            let hours = event
-                .end_time
-                .map(|end| {
-                    let delta = (end.minutes_from_midnight() - start.minutes_from_midnight()) as f32 / 60.0;
-                    if delta > 0.0 { delta } else { 1.0 }
-                })
-                .unwrap_or(1.0);
-            out.push(TimedEvent {
-                day: day as i32,
-                start_hour: f32::from(start.hour) + f32::from(start.minute) / 60.0,
-                hours,
-                title: SharedString::from(event.summary.as_str()),
-                holiday: true,
-                id: SharedString::new(),
-                enabled: true,
-                color: -1,
-            });
         }
     }
     out
@@ -282,7 +324,7 @@ fn day_event_rows(
             title: SharedString::from(holiday.name.as_str()),
             id: SharedString::new(),
             enabled: true,
-            color: HOLIDAY_COLOR,
+            color: catalog_color(profiles),
         })
         .collect();
     rows.extend(occs.iter().filter(|occ| occ.civil == date).map(|occ| {
@@ -322,7 +364,7 @@ fn popup_items(occs: &[Occurrence], holidays: &[Holiday], date: CivilDate, lang:
             title: SharedString::from(holiday.name.as_str()),
             id: SharedString::new(),
             enabled: true,
-            color: HOLIDAY_COLOR,
+            color: catalog_color(profiles),
         })
         .collect();
     for occ in occs.iter().filter(|occ| occ.civil == date) {
@@ -425,14 +467,16 @@ struct ListedObservance {
     name: String,
     time: Option<String>,
     minutes: i32,
+    color: i32,
 }
 
-fn listed_holiday(row: &Holiday) -> ListedObservance {
+fn listed_holiday(row: &Holiday, color: i32) -> ListedObservance {
     ListedObservance {
         date: row.date,
         name: row.name.clone(),
         time: None,
         minutes: 0,
+        color,
     }
 }
 
@@ -440,6 +484,7 @@ fn listed_feeds(feeds: &[IcalFeed], today: CivilDate) -> Vec<ListedObservance> {
     let until = today.saturating_add_days(AGENDA_HORIZON_DAYS);
     let mut out = Vec::new();
     for feed in feeds.iter().filter(|feed| feed.enabled) {
+        let color = feed_color(feeds, feed.id);
         for event in &feed.events {
             let mut date = if event.start < today { today } else { event.start };
             while date < event.end_exclusive && date <= until {
@@ -449,6 +494,7 @@ fn listed_feeds(feeds: &[IcalFeed], today: CivilDate) -> Vec<ListedObservance> {
                     name: event.summary.clone(),
                     time: if on_start { event.time_label() } else { None },
                     minutes: if on_start { event.minutes() } else { 0 },
+                    color,
                 });
                 date = match date.add_days(1) {
                     Ok(next) => next,
@@ -460,31 +506,25 @@ fn listed_feeds(feeds: &[IcalFeed], today: CivilDate) -> Vec<ListedObservance> {
     out
 }
 
-fn feed_day_extras(feeds: &[IcalFeed], date: CivilDate, lang: UiLang) -> (Vec<Holiday>, Vec<DayEvent>) {
+fn feed_day_rows(feeds: &[IcalFeed], date: CivilDate, lang: UiLang) -> Vec<DayEvent> {
     let all_day = all_day_label(lang);
-    let mut holidays = Vec::new();
-    let mut timed = Vec::new();
-    for event in events_on(feeds, date) {
-        if event.all_day {
-            holidays.push(Holiday {
-                date,
-                name: event.summary.clone(),
-                kind: crate::calendar::ObservanceKind::Holiday,
-            });
-        } else {
-            timed.push(day_row_for_feed(event, all_day));
+    let mut rows = Vec::new();
+    for feed in feeds.iter().filter(|feed| feed.enabled) {
+        let color = feed_color(feeds, feed.id);
+        for event in feed.events.iter().filter(|event| event.covers(date)) {
+            rows.push(day_row_for_feed(event, all_day, color));
         }
     }
-    (holidays, timed)
+    rows
 }
 
-fn day_row_for_feed(event: &IcalEvent, all_day: &str) -> DayEvent {
+fn day_row_for_feed(event: &IcalEvent, all_day: &str, color: i32) -> DayEvent {
     DayEvent {
         time: SharedString::from(event.time_label().unwrap_or_else(|| all_day.to_string())),
         title: SharedString::from(event.summary.as_str()),
         id: SharedString::new(),
         enabled: true,
-        color: HOLIDAY_COLOR,
+        color,
     }
 }
 
@@ -529,12 +569,12 @@ fn agenda_rows(
                 time: SharedString::from(time),
                 id: SharedString::new(),
                 enabled: true,
-                holiday: true,
+                holiday: holiday.color < 0,
                 year: holiday.date.year(),
                 month: i32::from(holiday.date.month()),
                 day: i32::from(holiday.date.day()),
                 today: holiday.date == today,
-                color: -1,
+                color: holiday.color,
             });
         } else {
             let occ = shown[i];
@@ -616,6 +656,8 @@ pub fn refresh(ui: &AppWindow, state: &mut AppState) {
             )
         })
         .collect();
+    let catalog = catalog_color(&state.profiles);
+    overlay_catalog(&mut cells, catalog);
     overlay_events(&mut cells, &occs, &state.profiles);
     overlay_feeds(&mut cells, &state.feeds);
     let selected_index = cells
@@ -644,24 +686,24 @@ pub fn refresh(ui: &AppWindow, state: &mut AppState) {
             )
         })
         .collect();
+    overlay_catalog(&mut week_days, catalog);
     overlay_events(&mut week_days, &occs, &state.profiles);
     overlay_feeds(&mut week_days, &state.feeds);
 
     let selected_cell = cells[selected_index as usize].clone();
     let selected_lunar = lookup(&mut state.tables, selected).ok();
     let selected_term = state.solar_terms.on_date(selected).cloned();
-    let mut day_holidays = state.holidays.on_date(
+    let day_holidays = state.holidays.on_date(
         &mut state.tables,
         selected,
         selected_lunar.as_ref(),
         selected_term.as_ref(),
     );
-    let (feed_holidays, feed_timed) = feed_day_extras(&state.feeds, selected, lang);
-    day_holidays.extend(feed_holidays);
+    let feed_rows = feed_day_rows(&state.feeds, selected, lang);
     let mut day_events = day_event_rows(&occs, &day_holidays, selected, lang, &state.profiles);
-    insert_timed(&mut day_events, day_holidays.len(), feed_timed.clone());
+    insert_timed(&mut day_events, day_holidays.len(), feed_rows.clone());
     let mut day_popup_items = popup_items(&occs, &day_holidays, selected, lang, &state.profiles);
-    insert_timed(&mut day_popup_items, day_holidays.len(), feed_timed);
+    insert_timed(&mut day_popup_items, day_holidays.len(), feed_rows);
     let upcoming = upcoming_occurrences(&state.events, &mut state.tables, today, &enabled);
     let mut observances: Vec<ListedObservance> = upcoming_observances(
         &state.holidays,
@@ -670,7 +712,7 @@ pub fn refresh(ui: &AppWindow, state: &mut AppState) {
         today,
     )
     .iter()
-    .map(listed_holiday)
+    .map(|row| listed_holiday(row, catalog))
     .collect();
     observances.extend(listed_feeds(&state.feeds, today));
     observances.sort_by(|a, b| a.date.cmp(&b.date).then(a.minutes.cmp(&b.minutes)).then(a.name.cmp(&b.name)));
@@ -745,7 +787,7 @@ fn refresh_feeds(ui: &AppWindow, state: &AppState) {
             enabled: feed.enabled,
             active: false,
             embedded: false,
-            color: -1,
+            color: feed_color(&state.feeds, feed.id),
         })
         .collect();
     ui.global::<crate::ui::Feeds>().set_items(ModelRc::new(VecModel::from(rows)));
@@ -969,7 +1011,7 @@ festival.hung,festival,Giỗ Tổ Hùng Vương,L-3-10,
 
         let mut meeting = occ(soon, "Họp", Some(ClockTime { hour: 9, minute: 0 }));
         meeting.event_id = EventId(4);
-        let listed: Vec<_> = observances.iter().map(listed_holiday).collect();
+        let listed: Vec<_> = observances.iter().map(|row| listed_holiday(row, HOLIDAY_COLOR)).collect();
         let rows = agenda_rows(std::slice::from_ref(&meeting), &listed, false, today, UiLang::Vi, &[]);
         let soon_rows: Vec<_> = rows.iter().filter(|row| row.year == 2026 && row.month == 10 && row.day == 20).collect();
         assert!(soon_rows[0].header);
@@ -1044,6 +1086,110 @@ festival.hung,festival,Giỗ Tổ Hùng Vương,L-3-10,
         let agenda = agenda_rows(&[work], &[], false, date, UiLang::Vi, &profiles);
         let event = agenda.iter().find(|row| !row.header).expect("event row");
         assert_eq!(event.color, 1);
+        assert!(!event.holiday);
+    }
+
+    #[test]
+    fn embedded_profile_marks_match_its_swatch() {
+        let date = CivilDate::new(2026, 10, 5).unwrap();
+        let embedded = crate::profile::Profile {
+            id: ProfileId(1),
+            name: "Lễ".into(),
+            enabled: true,
+            catalog: crate::profile::EMBEDDED_CATALOG.into(),
+            sort: -1,
+            embedded: true,
+        };
+        let personal = named_profile(2, "Nhà");
+        let profiles = [embedded, personal];
+        let color = catalog_color(&profiles);
+        assert_eq!(color, profile_color(&profiles, ProfileId(1)));
+        assert_eq!(color, 0);
+        assert_ne!(color, HOLIDAY_COLOR);
+        assert!(color < FEED_COLOR_BASE);
+
+        let mut tables = CalendarTables::new(2026).unwrap();
+        let mut terms = SolarTermTables::new(2026).unwrap();
+        let mut holidays = HolidayTables::empty();
+        let mut cell = cell_from_date(&mut tables, &mut terms, &mut holidays, date, 2026, 10, date, 9, UiLang::Vi);
+        cell.holiday = true;
+        overlay_catalog(std::slice::from_mut(&mut cell), color);
+        assert_eq!(cell.mark0, color);
+        assert_eq!(cell.mark1, -1);
+
+        let holiday = Holiday {
+            date,
+            name: "Quốc khánh".into(),
+            kind: crate::calendar::ObservanceKind::Holiday,
+        };
+        let rows = day_event_rows(&[], &[holiday.clone()], date, UiLang::Vi, &profiles);
+        assert_eq!(rows[0].color, color);
+        let listed = listed_holiday(&holiday, color);
+        let agenda = agenda_rows(&[], &[listed], false, date, UiLang::Vi, &profiles);
+        let event = agenda.iter().find(|row| !row.header).expect("catalog row");
+        assert_eq!(event.color, color);
+    }
+
+    fn named_feed(id: i64, name: &str, date: CivilDate, all_day: bool) -> IcalFeed {
+        IcalFeed {
+            id,
+            url: format!("https://example.invalid/{id}"),
+            name: name.into(),
+            enabled: true,
+            fetched_at: 0,
+            events: vec![IcalEvent {
+                summary: name.into(),
+                start: date,
+                end_exclusive: date.add_days(1).expect("next day"),
+                all_day,
+                start_time: if all_day { None } else { Some(ClockTime { hour: 11, minute: 0 }) },
+                end_time: if all_day { None } else { Some(ClockTime { hour: 12, minute: 0 }) },
+            }],
+        }
+    }
+
+    #[test]
+    fn ical_feeds_have_their_own_marks() {
+        let date = CivilDate::new(2026, 10, 5).unwrap();
+        let feeds = [named_feed(1, "Work", date, true), named_feed(2, "School", date, true)];
+        assert_eq!(feed_color(&feeds, 1), FEED_COLOR_BASE);
+        assert_eq!(feed_color(&feeds, 2), FEED_COLOR_BASE + 1);
+        assert_ne!(feed_color(&feeds, 1), profile_color(&[named_profile(1, "Nhà")], ProfileId(1)));
+
+        let mut tables = CalendarTables::new(2026).unwrap();
+        let mut terms = SolarTermTables::new(2026).unwrap();
+        let mut holidays = HolidayTables::empty();
+        let mut cell = cell_from_date(&mut tables, &mut terms, &mut holidays, date, 2026, 10, date, 9, UiLang::Vi);
+        overlay_feeds(std::slice::from_mut(&mut cell), &feeds);
+        assert!(!cell.holiday);
+        assert!(cell.has_event);
+        assert_eq!(cell.mark0, FEED_COLOR_BASE);
+        assert_eq!(cell.mark1, FEED_COLOR_BASE + 1);
+
+        let profiles = [named_profile(1, "Nhà")];
+        let mut home = occ(date, "Ở nhà", None);
+        home.profile_id = ProfileId(1);
+        let mut mixed = cell_from_date(&mut tables, &mut terms, &mut holidays, date, 2026, 10, date, 9, UiLang::Vi);
+        overlay_events(std::slice::from_mut(&mut mixed), std::slice::from_ref(&home), &profiles);
+        overlay_feeds(std::slice::from_mut(&mut mixed), &feeds);
+        assert_eq!(mixed.mark0, 0);
+        assert_eq!(mixed.mark1, FEED_COLOR_BASE);
+        assert_eq!(mixed.mark2, FEED_COLOR_BASE + 1);
+
+        let timed = [named_feed(1, "Call", date, false)];
+        let blocks = feed_blocks(&date.week_days(), &timed);
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].color, FEED_COLOR_BASE);
+        assert!(!blocks[0].holiday);
+
+        let rows = feed_day_rows(&feeds, date, UiLang::Vi);
+        assert_eq!(rows[0].color, FEED_COLOR_BASE);
+        assert_ne!(rows[0].color, HOLIDAY_COLOR);
+
+        let listed = listed_feeds(&feeds, date);
+        let agenda = agenda_rows(&[], &listed, false, date, UiLang::Vi, &[]);
+        let event = agenda.iter().find(|row| !row.header).expect("feed row");
+        assert_eq!(event.color, FEED_COLOR_BASE);
         assert!(!event.holiday);
     }
 }
