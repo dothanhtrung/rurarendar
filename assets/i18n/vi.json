@@ -60,6 +60,8 @@
   "encrypt_body": "Để trống nếu không mã hoá nội dung trên server. Khoá được lưu trong keyring của máy (Linux: Secret Service / GNOME Keyring / KWallet; Android: Keystore), không ghi vào file cấu hình. Đổi khoá: máy sẽ tải dữ liệu, giải mã bằng khoá cũ, mã hoá lại rồi ghi đè bản mã hoá trên server. Khoá cũ được giữ trên máy cho đến khi mọi bản ghi đã mã hoá lại. Server không bao giờ nhận khoá này.",
   "encrypt_key": "Khoá mã hoá",
   "save_key": "Lưu khoá",
+  "show_secret": "Hiện",
+  "hide_secret": "Ẩn",
   "reminders_title": "Thông báo",
   "reminders_body": "Mỗi sự kiện có thể báo hoặc không. Khi bật, giờ báo mặc định là 08:00 (giờ máy).",
   "display_title": "Hiển thị",

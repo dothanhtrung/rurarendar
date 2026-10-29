@@ -1,5 +1,6 @@
 import { Palette, ProfileColor, DayCellData, ProfileRow } from "theme-default.slint";
 import { Calendar, Chrome, Motion } from "demo-data.slint";
+import { I18n } from "i18n.slint";
 
 // Round for a profile, square for an iCal feed. Hidden callers wrap with `if (index >= 0)`.
 export component SourceMark inherits Rectangle {
@@ -486,6 +487,7 @@ export component Field inherits Rectangle {
     in property <string> placeholder;
     in property <string> label;
     in property <bool> secret: false;
+    private property <bool> revealed: false;
     min-width: 0px;
     min-height: 60px;
     VerticalLayout {
@@ -504,18 +506,31 @@ export component Field inherits Rectangle {
             border-color: Palette.border;
             background: Palette.bg-surface;
             height: 36px;
-            HorizontalLayout {
-                padding-left: 12px;
-                padding-right: 12px;
-                TextInput {
-                    text <=> root.text;
-                    color: Palette.text-primary;
-                    font-size: 0.95rem;
-                    font-family: Palette.font-ui;
-                    single-line: true;
-                    min-width: 0px;
-                    input-type: root.secret ? InputType.password : InputType.text;
-                    vertical-alignment: center;
+
+            TextInput {
+                x: 12px;
+                y: 0px;
+                width: parent.width - 12px - (root.secret ? 34px : 12px);
+                height: parent.height;
+                text <=> root.text;
+                color: Palette.text-primary;
+                font-size: 0.95rem;
+                font-family: Palette.font-ui;
+                single-line: true;
+                input-type: root.secret && !root.revealed ? InputType.password : InputType.text;
+                vertical-alignment: center;
+            }
+
+            if (root.secret): IconButton {
+                x: parent.width - self.width - 2px;
+                y: (parent.height - self.height) / 2;
+                size: 32px;
+                icon: root.revealed ? @image-url("icons/eye-off.svg") : @image-url("icons/eye.svg");
+                icon-color: Palette.text-secondary;
+                // Tooltips steal the first tap on Android.
+                tip: Chrome.phone ? "" : (root.revealed ? I18n.hide-secret : I18n.show-secret);
+                clicked => {
+                    root.revealed = !root.revealed;
                 }
             }
         }

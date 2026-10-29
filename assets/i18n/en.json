@@ -60,6 +60,8 @@
   "encrypt_body": "Empty means no encryption",
   "encrypt_key": "Encryption key",
   "save_key": "Save key",
+  "show_secret": "Show",
+  "hide_secret": "Hide",
   "reminders_title": "Alerts",
   "reminders_body": "",
   "display_title": "Display",

@@ -150,6 +150,8 @@ pub struct Bundle {
     pub encrypt_body: String,
     pub encrypt_key: String,
     pub save_key: String,
+    pub show_secret: String,
+    pub hide_secret: String,
     pub reminders_title: String,
     pub reminders_body: String,
     pub display_title: String,
@@ -325,6 +327,8 @@ pub fn apply(ui: &AppWindow, pref: LocalePref, bundle: &Bundle) {
     g.set_encrypt_body(s(&bundle.encrypt_body));
     g.set_encrypt_key(s(&bundle.encrypt_key));
     g.set_save_key(s(&bundle.save_key));
+    g.set_show_secret(s(&bundle.show_secret));
+    g.set_hide_secret(s(&bundle.hide_secret));
     g.set_reminders_title(s(&bundle.reminders_title));
     g.set_reminders_body(s(&bundle.reminders_body));
     g.set_display_title(s(&bundle.display_title));
