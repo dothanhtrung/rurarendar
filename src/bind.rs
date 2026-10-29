@@ -604,6 +604,26 @@ pub fn wire(
             let _ = sync_tx.send(SyncCmd::PushPull);
         });
     }
+    {
+        let ui_weak = ui.as_weak();
+        let sync_tx = sync_tx.clone();
+        ui.global::<Sync>().on_disconnect(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                ui.global::<Sync>().set_error(SharedString::new());
+            }
+            let _ = sync_tx.send(SyncCmd::Disconnect);
+        });
+    }
+    {
+        let ui_weak = ui.as_weak();
+        let sync_tx = sync_tx.clone();
+        ui.global::<Sync>().on_clear_server(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                ui.global::<Sync>().set_error(SharedString::new());
+            }
+            let _ = sync_tx.send(SyncCmd::ClearServer);
+        });
+    }
 
     let sync_timer = Timer::default();
     {

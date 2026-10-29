@@ -106,6 +106,10 @@ fn default_server_url() -> String {
     "http://127.0.0.1:8080".into()
 }
 
+fn default_sync_enabled() -> bool {
+    true
+}
+
 /// Device settings. Calendar data stays in SQLite; nothing in this file is synced.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
@@ -125,6 +129,9 @@ pub struct Config {
     pub server_url: String,
     pub username: String,
     pub token: String,
+    /// `false` after an explicit disconnect. Credentials may still be stored, but nothing is synced.
+    #[serde(default = "default_sync_enabled")]
+    pub sync_enabled: bool,
     /// Deserialize-only. Old files may still contain this; `load` moves it to the device keyring.
     #[serde(default, skip_serializing)]
     pub encrypt_key: String,
@@ -148,6 +155,7 @@ impl Default for Config {
             server_url: default_server_url(),
             username: String::new(),
             token: String::new(),
+            sync_enabled: default_sync_enabled(),
             encrypt_key: String::new(),
             old_encrypt_key: None,
             key_revision: 0,
@@ -303,6 +311,7 @@ mod tests {
         assert_eq!(config.color_mode, "auto");
         assert!(config.animations);
         assert_eq!(config.server_url, "http://127.0.0.1:8080");
+        assert!(config.sync_enabled);
         let _ = std::fs::remove_file(&path);
     }
 

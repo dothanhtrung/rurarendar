@@ -45,7 +45,12 @@ pub async fn load_events(pool: &SqlitePool) -> anyhow::Result<EventStore> {
 pub async fn upsert_event(pool: &SqlitePool, event: &Event) -> anyhow::Result<EventId> {
     let payload = serde_json::to_string(&EventBody::from_event(event))?;
     let profile_id = event.profile_id.0;
-    let base_rev = (event.rev - 1).max(0);
+    // A server the client has never reached still has rev 0, even after local edits.
+    let base_rev = if event_synced(pool, event.id).await? {
+        (event.rev - 1).max(0)
+    } else {
+        0
+    };
     let mut transaction = pool.begin().await?;
     let id = if event.id == EventId::default() {
         let sync_key = crate::crypto::random_salt()
@@ -91,7 +96,11 @@ pub async fn upsert_event(pool: &SqlitePool, event: &Event) -> anyhow::Result<Ev
 }
 
 pub async fn tombstone_event(pool: &SqlitePool, id: i64, rev: i64) -> anyhow::Result<()> {
-    let base_rev = (rev - 1).max(0);
+    let base_rev = if event_synced(pool, EventId(id)).await? {
+        (rev - 1).max(0)
+    } else {
+        0
+    };
     sqlx::query!("UPDATE events SET deleted = 1, rev = ? WHERE id = ?", rev, id)
         .execute(pool)
         .await?;
@@ -173,6 +182,20 @@ pub async fn outbox_rows(pool: &SqlitePool) -> anyhow::Result<Vec<OutboxRow>> {
             deleted: r.deleted != 0,
         })
         .collect())
+}
+
+async fn event_synced(pool: &SqlitePool, id: EventId) -> anyhow::Result<bool> {
+    if id == EventId::default() {
+        return Ok(false);
+    }
+    let id = id.0;
+    let sync_id = sqlx::query_scalar!(
+        r#"SELECT sync_id as "sync_id?" FROM events WHERE id = ?"#,
+        id
+    )
+    .fetch_optional(pool)
+    .await?;
+    Ok(sync_id.flatten().is_some())
 }
 
 pub async fn drop_outbox(pool: &SqlitePool, item_id: i64) -> anyhow::Result<()> {
@@ -463,6 +486,7 @@ mod tests {
         assert_eq!(updated.sync_key, original_sync_key);
         assert_eq!(updated.sync_id, Some(31));
         assert_eq!(updated.rev, event.rev);
+        assert_eq!(updated.base_rev, event.rev - 1);
         tombstone_event(&pool, event.id.0, event.rev + 1).await.unwrap();
         assert!(load_events(&pool).await.unwrap().get(event.id).is_none());
         let deleted = outbox_rows(&pool).await.unwrap().into_iter()
@@ -470,6 +494,30 @@ mod tests {
         assert!(deleted.deleted);
         assert_eq!(deleted.sync_key, original_sync_key);
         assert_eq!(deleted.sync_id, Some(31));
+        assert_eq!(deleted.base_rev, event.rev);
+    }
+
+    #[tokio::test]
+    async fn unsynced_edits_keep_base_rev_zero() {
+        let pool = memory_pool().await;
+        sqlx::migrate!("db/migrations/sqlite").run(&pool).await.unwrap();
+        let mut event = draft();
+        event.id = upsert_event(&pool, &event).await.unwrap();
+        event.title = "Edited before sync".into();
+        event.rev += 1;
+        upsert_event(&pool, &event).await.unwrap();
+        event.rev += 1;
+        upsert_event(&pool, &event).await.unwrap();
+        let row = outbox_rows(&pool).await.unwrap().into_iter()
+            .find(|row| row.item_id == event.id.0).unwrap();
+        assert!(row.sync_id.is_none());
+        assert_eq!(row.rev, event.rev);
+        assert_eq!(row.base_rev, 0);
+        tombstone_event(&pool, event.id.0, event.rev + 1).await.unwrap();
+        let deleted = outbox_rows(&pool).await.unwrap().into_iter()
+            .find(|row| row.item_id == event.id.0).unwrap();
+        assert!(deleted.deleted);
+        assert_eq!(deleted.base_rev, 0);
     }
 
     #[tokio::test]

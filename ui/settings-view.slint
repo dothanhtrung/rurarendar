@@ -102,6 +102,7 @@ export component SettingsView inherits Rectangle {
                         }
                         HorizontalLayout {
                             spacing: 8px;
+                            alignment: start;
                             InkButton {
                                 label: I18n.save-and-sync;
                                 clicked => {
@@ -114,6 +115,24 @@ export component SettingsView inherits Rectangle {
                                 quiet: true;
                                 clicked => {
                                     Sync.sync-now();
+                                }
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+                            if (Sync.logged-in): InkButton {
+                                label: I18n.disconnect;
+                                quiet: true;
+                                clicked => {
+                                    Sync.disconnect();
+                                }
+                            }
+                            InkButton {
+                                label: I18n.clear-server;
+                                quiet: true;
+                                clicked => {
+                                    Sync.clear-server();
                                 }
                             }
                         }

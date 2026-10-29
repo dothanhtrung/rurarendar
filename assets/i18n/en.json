@@ -52,6 +52,10 @@
   "token": "Token",
   "save_and_sync": "Save and sync",
   "sync_now": "Sync now",
+  "disconnect": "Disconnect",
+  "clear_server": "Clear server info",
+  "sync_disconnected": "Disconnected. Nothing else will be sent to the server.",
+  "sync_cleared": "Server information cleared, and sync is disconnected.",
   "encrypt_title": "Encryption key",
   "encrypt_body": "Empty means no encryption",
   "encrypt_key": "Encryption key",
@@ -155,7 +159,7 @@
   "ical_section": "iCal calendars",
   "ical_add": "Add iCal calendar",
   "ical_url": "iCal URL",
-  "ical_hint": "Paste an .ics link, for example https://www.officeholidays.com/ics-all/vietnam",
+  "ical_hint": "",
   "ical_url_required": "Enter an iCal URL.",
   "ical_fetching": "Loading calendar…"
 }

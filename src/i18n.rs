@@ -142,6 +142,10 @@ pub struct Bundle {
     pub token: String,
     pub save_and_sync: String,
     pub sync_now: String,
+    pub disconnect: String,
+    pub clear_server: String,
+    pub sync_disconnected: String,
+    pub sync_cleared: String,
     pub encrypt_title: String,
     pub encrypt_body: String,
     pub encrypt_key: String,
@@ -315,6 +319,8 @@ pub fn apply(ui: &AppWindow, pref: LocalePref, bundle: &Bundle) {
     g.set_token(s(&bundle.token));
     g.set_save_and_sync(s(&bundle.save_and_sync));
     g.set_sync_now(s(&bundle.sync_now));
+    g.set_disconnect(s(&bundle.disconnect));
+    g.set_clear_server(s(&bundle.clear_server));
     g.set_encrypt_title(s(&bundle.encrypt_title));
     g.set_encrypt_body(s(&bundle.encrypt_body));
     g.set_encrypt_key(s(&bundle.encrypt_key));

@@ -48,6 +48,10 @@ pub enum SyncCmd {
     AddIcal { url: String, name: String },
     SetIcalEnabled { id: i64, enabled: bool },
     DeleteIcal(i64),
+    /// Stop push and pull. Server URL, username, and token stay so the user can connect again.
+    Disconnect,
+    /// Forget the server URL, username, token, and pull cursor, and disconnect.
+    ClearServer,
 }
 
 #[derive(Debug)]
@@ -303,6 +307,30 @@ async fn worker(
                     let _ = events.send(SyncEvent::IcalFeeds { feeds, close_sheet: false });
                 }
             }
+            SyncCmd::Disconnect => {
+                config.sync_enabled = false;
+                if let Err(e) = config.save(&config_path) {
+                    let _ = events.send(SyncEvent::Error(e.to_string()));
+                    continue;
+                }
+                session = None;
+                let _ = events.send(ready_event(&config, false));
+                let _ = events.send(SyncEvent::Status(localized(&config).sync_disconnected));
+            }
+            SyncCmd::ClearServer => {
+                config.sync_enabled = false;
+                config.server_url.clear();
+                config.username.clear();
+                config.token.clear();
+                config.pull_cursor.clear();
+                if let Err(e) = config.save(&config_path) {
+                    let _ = events.send(SyncEvent::Error(e.to_string()));
+                    continue;
+                }
+                session = None;
+                let _ = events.send(ready_event(&config, false));
+                let _ = events.send(SyncEvent::Status(localized(&config).sync_cleared));
+            }
             SyncCmd::PushPull => {
                 let Some(sess) = session.as_mut() else {
                     let _ = events.send(SyncEvent::Error("Chưa có username/token.".into()));
@@ -368,11 +396,7 @@ async fn refresh_stale_ical(pool: &SqlitePool) -> Result<Vec<crate::ical::IcalFe
 
 fn ready_event(config: &Config, connected: bool) -> SyncEvent {
     SyncEvent::Ready {
-        server: if config.server_url.is_empty() {
-            "http://127.0.0.1:8080".into()
-        } else {
-            config.server_url.clone()
-        },
+        server: config.server_url.clone(),
         username: config.username.clone(),
         token: config.token.clone(),
         encrypt_key: crate::secrets::load().map(|p| p.current).unwrap_or_default(),
@@ -380,8 +404,16 @@ fn ready_event(config: &Config, connected: bool) -> SyncEvent {
     }
 }
 
+fn localized(config: &Config) -> crate::i18n::Bundle {
+    crate::i18n::Bundle::load(crate::i18n::LocalePref::from_setting(&config.ui_locale).resolve())
+}
+
 fn restore_session(config: &mut Config, config_path: &Path) -> Option<Session> {
-    if config.server_url.is_empty() || config.username.is_empty() || config.token.is_empty() {
+    if !config.sync_enabled
+        || config.server_url.is_empty()
+        || config.username.is_empty()
+        || config.token.is_empty()
+    {
         return None;
     }
     session_from_store(
@@ -408,6 +440,7 @@ fn connect(
     config.server_url = server.clone();
     config.username = username.to_string();
     config.token = token.to_string();
+    config.sync_enabled = true;
     config.save(config_path)?;
     session_from_store(config, config_path, server, username.to_string(), token.to_string())
 }
@@ -474,7 +507,11 @@ fn set_encrypt_key(
             None => restore_session(config, config_path),
         });
     }
-    if let Some(pending_old) = &stored.old
+    // `old` is only the passphrase still needed to re-encrypt server blobs.
+    // With no session there is nothing to rotate, so a pending old key must not block another local change.
+    let connected = session.is_some();
+    if connected
+        && let Some(pending_old) = &stored.old
         && !pending_old.is_empty()
         && pending_old != &old_pass
     {
@@ -482,7 +519,7 @@ fn set_encrypt_key(
     }
     crate::secrets::store(&crate::secrets::Passphrase {
         current: new_pass.to_string(),
-        old: Some(old_pass),
+        old: if connected { Some(old_pass) } else { None },
     })?;
     config.key_revision = if new_pass.is_empty() {
         0
@@ -731,13 +768,14 @@ async fn push_outbox(pool: &SqlitePool, sess: &Session) -> anyhow::Result<()> {
         };
         let plain = serde_json::to_vec(&EventBody::from_event(&event))?;
         let blob = crypto::seal(sess.key.as_ref(), row.sync_key.as_bytes(), &plain, sess.key_revision)?;
+        let base_rev = if row.sync_id.is_none() { 0 } else { row.base_rev };
         let req = json!({
             "items": [{
             "item_id": row.sync_id,
             "sync_key": row.sync_key,
                 "item_type": row.item_type,
                 "rev": row.rev,
-                "base_rev": row.base_rev,
+                "base_rev": base_rev,
                 "deleted": row.deleted,
                 "blob": blob,
             }]
@@ -815,4 +853,65 @@ async fn post_json(
     let status = resp.status();
     let body: Value = resp.json().await.unwrap_or(json!({ "err": status.to_string() }));
     Ok(body)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config_file() -> (Config, std::path::PathBuf) {
+        let path = std::env::temp_dir().join(format!(
+            "rurarendar-key-{}-{}.ron",
+            std::process::id(),
+            format!("{:?}", std::thread::current().id()).replace(|c: char| !c.is_ascii_alphanumeric(), "")
+        ));
+        let _ = std::fs::remove_file(&path);
+        (Config::default(), path)
+    }
+
+    fn connected() -> Session {
+        Session {
+            server: "http://127.0.0.1:8080".into(),
+            username: "user".into(),
+            token: "token".into(),
+            key: None,
+            old_key: None,
+            key_revision: 1,
+        }
+    }
+
+    #[test]
+    fn offline_key_changes_do_not_wait_for_sync() {
+        let _ = crate::secrets::delete();
+        let (mut config, path) = config_file();
+        set_encrypt_key(&mut config, &path, None, "one").unwrap();
+        set_encrypt_key(&mut config, &path, None, "two").unwrap();
+        set_encrypt_key(&mut config, &path, None, "three").unwrap();
+        let stored = crate::secrets::load().unwrap();
+        assert_eq!(stored.current, "three");
+        assert!(stored.old.is_none());
+        assert_eq!(config.key_revision, 3);
+        let _ = crate::secrets::delete();
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn connected_key_change_still_blocks_until_the_previous_rotation_finishes() {
+        let _ = crate::secrets::delete();
+        let (mut config, path) = config_file();
+        crate::secrets::store(&crate::secrets::Passphrase {
+            current: "two".into(),
+            old: Some("one".into()),
+        })
+        .unwrap();
+        config.key_revision = 2;
+        let err = match set_encrypt_key(&mut config, &path, Some(&connected()), "three") {
+            Err(err) => err,
+            Ok(_) => panic!("connected rotation should block"),
+        };
+        assert!(err.to_string().contains("khoá trước"));
+        assert_eq!(crate::secrets::load().unwrap().current, "two");
+        let _ = crate::secrets::delete();
+        let _ = std::fs::remove_file(&path);
+    }
 }
