@@ -161,23 +161,19 @@ fn send(title: &str, body: &str) -> anyhow::Result<()> {
 #[cfg(target_os = "android")]
 fn schedule_android(schedules: &str) -> anyhow::Result<()> {
     use jni::{
-        JavaVM,
+        jni_sig,
+        jni_str,
         objects::{JObject, JValue},
     };
 
-    let context = ndk_context::android_context();
-    let vm = unsafe { JavaVM::from_raw(context.vm().cast()) };
-    vm.attach_current_thread(|env| -> jni::errors::Result<()> {
-        let context_object = unsafe { JObject::from_raw(env, context.context().cast()) };
+    crate::android::with_env(|env, application| {
+        let class = crate::android::load_app_class(env, application, "net.onlyesterday.rurarendar.NotificationBridge")?;
         let schedules = JObject::from(env.new_string(schedules)?);
         env.call_static_method(
-            jni::jni_str!("net/onlyesterday/rurarendar/NotificationBridge"),
-            jni::jni_str!("scheduleAll"),
-            jni::jni_sig!("(Landroid/content/Context;Ljava/lang/String;)V"),
-            &[
-                JValue::Object(&context_object),
-                JValue::Object(&schedules),
-            ],
+            &class,
+            jni_str!("scheduleAll"),
+            jni_sig!((android.content.Context, java.lang.String) -> void),
+            &[JValue::Object(application), JValue::Object(&schedules)],
         )?;
         Ok(())
     })?;

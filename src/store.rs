@@ -218,6 +218,51 @@ pub async fn acknowledge_outbox(pool: &SqlitePool, item_id: i64, sync_id: i64) -
     Ok(())
 }
 
+#[derive(Debug, Clone)]
+pub struct LocalSyncItem {
+    pub item_id: i64,
+    pub sync_id: Option<i64>,
+    pub sync_key: String,
+    pub rev: i64,
+    pub deleted: bool,
+}
+
+pub async fn local_sync_items(pool: &SqlitePool) -> anyhow::Result<Vec<LocalSyncItem>> {
+    let rows = sqlx::query!(
+        r#"SELECT id as "id!", sync_id, sync_key as "sync_key!", rev as "rev!", deleted as "deleted!" FROM events"#
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| LocalSyncItem {
+            item_id: row.id,
+            sync_id: row.sync_id,
+            sync_key: row.sync_key,
+            rev: row.rev,
+            deleted: row.deleted != 0,
+        })
+        .collect())
+}
+
+pub async fn adopt_pushed(pool: &SqlitePool, item_id: i64, sync_id: i64, rev: i64) -> anyhow::Result<()> {
+    let mut transaction = pool.begin().await?;
+    let result = sqlx::query!(
+        "UPDATE events SET sync_id = ?, rev = ? WHERE id = ?",
+        sync_id,
+        rev,
+        item_id
+    )
+    .execute(&mut *transaction)
+    .await?;
+    anyhow::ensure!(result.rows_affected() == 1, "Event {item_id} no longer exists");
+    sqlx::query!("DELETE FROM outbox WHERE item_id = ?", item_id)
+        .execute(&mut *transaction)
+        .await?;
+    transaction.commit().await?;
+    Ok(())
+}
+
 pub async fn event_by_id(pool: &SqlitePool, id: i64) -> anyhow::Result<Option<Event>> {
     let row = sqlx::query!(
         r#"SELECT id as "id!", payload as "payload!", rev as "rev!" FROM events WHERE id = ?"#,
@@ -576,5 +621,21 @@ mod tests {
         remote.rev = 3;
         apply_pulled(&pool, 42, &sync_key, &remote, true, ProfileId::default()).await.unwrap();
         assert!(load_events(&pool).await.unwrap().get(local_id).is_none());
+    }
+
+    #[tokio::test]
+    async fn adopt_pushed_keeps_tombstones_and_clears_outbox() {
+        let pool = memory_pool().await;
+        sqlx::migrate!("db/migrations/sqlite").run(&pool).await.unwrap();
+        let mut event = draft();
+        event.id = upsert_event(&pool, &event).await.unwrap();
+        tombstone_event(&pool, event.id.0, 2).await.unwrap();
+        adopt_pushed(&pool, event.id.0, 9, 4).await.unwrap();
+        let items = local_sync_items(&pool).await.unwrap();
+        let item = items.into_iter().find(|item| item.item_id == event.id.0).unwrap();
+        assert_eq!(item.sync_id, Some(9));
+        assert_eq!(item.rev, 4);
+        assert!(item.deleted);
+        assert!(outbox_rows(&pool).await.unwrap().is_empty());
     }
 }

@@ -1,3 +1,7 @@
+use std::collections::{
+    HashMap,
+    HashSet,
+};
 use std::path::{
     Path,
     PathBuf,
@@ -52,6 +56,10 @@ pub enum SyncCmd {
     Disconnect,
     /// Forget the server URL, username, token, and pull cursor, and disconnect.
     ClearServer,
+    /// Drop the passphrase on this device. Server blobs are left as-is.
+    ClearEncryptKey,
+    /// Replace every server event with the events on this device.
+    ForceOverwrite,
 }
 
 #[derive(Debug)]
@@ -331,6 +339,35 @@ async fn worker(
                 let _ = events.send(ready_event(&config, false));
                 let _ = events.send(SyncEvent::Status(localized(&config).sync_cleared));
             }
+            SyncCmd::ClearEncryptKey => {
+                match clear_encrypt_key(&mut config, &config_path, session.as_ref()) {
+                    Ok(sess) => {
+                        session = sess;
+                        let _ = events.send(ready_event(&config, session.is_some()));
+                        let _ = events.send(SyncEvent::Status(localized(&config).encrypt_key_cleared));
+                    }
+                    Err(e) => {
+                        let _ = events.send(SyncEvent::Error(e.to_string()));
+                    }
+                }
+            }
+            SyncCmd::ForceOverwrite => {
+                let Some(sess) = session.as_mut() else {
+                    let _ = events.send(SyncEvent::Error(localized(&config).overwrite_need_login));
+                    continue;
+                };
+                match force_overwrite(&pool, sess).await {
+                    Ok(()) => {
+                        if let Ok(store) = store::load_events(&pool).await {
+                            let _ = events.send(SyncEvent::Events(store));
+                        }
+                        let _ = events.send(SyncEvent::Status(localized(&config).overwrite_done));
+                    }
+                    Err(e) => {
+                        let _ = events.send(SyncEvent::Error(e.to_string()));
+                    }
+                }
+            }
             SyncCmd::PushPull => {
                 let Some(sess) = session.as_mut() else {
                     let _ = events.send(SyncEvent::Error("Chưa có username/token.".into()));
@@ -540,6 +577,43 @@ fn set_encrypt_key(
     Ok(restore_session(config, config_path))
 }
 
+fn clear_encrypt_key(
+    config: &mut Config,
+    config_path: &Path,
+    session: Option<&Session>,
+) -> anyhow::Result<Option<Session>> {
+    crate::secrets::delete()?;
+    config.key_revision = 0;
+    config.save(config_path)?;
+    if let Some(session) = session {
+        return session_from_store(
+            config,
+            config_path,
+            session.server.clone(),
+            session.username.clone(),
+            session.token.clone(),
+        )
+        .map(Some);
+    }
+    Ok(restore_session(config, config_path))
+}
+
+#[derive(Clone, Debug)]
+struct ServerItemMeta {
+    item_id: i64,
+    sync_key: String,
+    item_type: String,
+    rev: i64,
+    deleted: bool,
+}
+
+fn overwrite_revs(server_rev: Option<i64>, local_rev: i64) -> (i64, i64) {
+    match server_rev {
+        Some(rev) => (rev, rev + 1),
+        None => (0, local_rev.max(1)),
+    }
+}
+
 fn blob_needs_reencrypt(blob: &Blob, sess: &Session) -> bool {
     match sess.key.as_ref() {
         None => !crypto::is_plain(blob),
@@ -678,6 +752,199 @@ async fn reencrypt_push(
         store::apply_pulled(pool, item_id, sync_key, &event, false, active_profile).await?;
     }
     Ok(())
+}
+
+async fn force_overwrite(pool: &SqlitePool, sess: &Session) -> anyhow::Result<()> {
+    let client = reqwest::Client::new();
+    let server_items = list_server_items(&client, sess).await?;
+    let server_by_key: HashMap<String, ServerItemMeta> = server_items
+        .iter()
+        .cloned()
+        .map(|item| (item.sync_key.clone(), item))
+        .collect();
+    let local_items = store::local_sync_items(pool).await?;
+    let local_keys: HashSet<String> = local_items.iter().map(|item| item.sync_key.clone()).collect();
+
+    for item in local_items {
+        let server = server_by_key.get(&item.sync_key);
+        if item.deleted && item.sync_id.is_none() && server.is_none() {
+            store::drop_outbox(pool, item.item_id).await?;
+            continue;
+        }
+        let Some(event) = store::event_by_id(pool, item.item_id).await? else {
+            store::drop_outbox(pool, item.item_id).await?;
+            continue;
+        };
+        let plain = serde_json::to_vec(&EventBody::from_event(&event))?;
+        let blob = crypto::seal(sess.key.as_ref(), item.sync_key.as_bytes(), &plain, sess.key_revision)?;
+        let (server_id, rev) = push_keep_client(
+            &client,
+            sess,
+            server.map(|row| row.item_id),
+            &item.sync_key,
+            "event",
+            server.map(|row| row.rev),
+            item.rev,
+            item.deleted,
+            &blob,
+        )
+        .await?;
+        store::adopt_pushed(pool, item.item_id, server_id, rev).await?;
+    }
+
+    for server in server_items {
+        if server.item_type != "event" || server.deleted || local_keys.contains(&server.sync_key) {
+            continue;
+        }
+        let dummy = crate::event::Event::tombstone_shell(EventId::default(), server.rev + 1);
+        let plain = serde_json::to_vec(&EventBody::from_event(&dummy))?;
+        let blob = crypto::seal(sess.key.as_ref(), server.sync_key.as_bytes(), &plain, sess.key_revision)?;
+        push_keep_client(
+            &client,
+            sess,
+            Some(server.item_id),
+            &server.sync_key,
+            &server.item_type,
+            Some(server.rev),
+            server.rev + 1,
+            true,
+            &blob,
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+async fn list_server_items(client: &reqwest::Client, sess: &Session) -> anyhow::Result<Vec<ServerItemMeta>> {
+    let mut cursor = String::new();
+    let mut out = Vec::new();
+    loop {
+        let url = format!("{}/v1/sync/items", sess.server);
+        let body = get_url_query(
+            client,
+            &sess.token,
+            &sess.username,
+            &url,
+            &[("cursor", cursor.as_str()), ("limit", "100")],
+        )
+        .await?;
+        if let Some(err) = body.get("err").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+            anyhow::bail!(err.to_string());
+        }
+        let items = body
+            .get("items")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+        for item in items {
+            let item_id = item
+                .get("item_id")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| anyhow::anyhow!("Missing server item ID"))?;
+            let sync_key = item
+                .get("sync_key")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Missing item sync key"))?
+                .to_string();
+            out.push(ServerItemMeta {
+                item_id,
+                sync_key,
+                item_type: item
+                    .get("item_type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("event")
+                    .to_string(),
+                rev: item.get("rev").and_then(|v| v.as_i64()).unwrap_or(1),
+                deleted: item.get("deleted").and_then(|v| v.as_bool()).unwrap_or(false),
+            });
+        }
+        cursor = body
+            .get("next_cursor")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        if !body.get("has_more").and_then(|v| v.as_bool()).unwrap_or(false) {
+            break;
+        }
+    }
+    Ok(out)
+}
+
+async fn push_keep_client(
+    client: &reqwest::Client,
+    sess: &Session,
+    mut server_id: Option<i64>,
+    sync_key: &str,
+    item_type: &str,
+    mut server_rev: Option<i64>,
+    local_rev: i64,
+    deleted: bool,
+    blob: &Blob,
+) -> anyhow::Result<(i64, i64)> {
+    for _ in 0..8 {
+        let (base_rev, rev) = overwrite_revs(server_rev, local_rev);
+        let req = json!({
+            "items": [{
+                "item_id": server_id,
+                "sync_key": sync_key,
+                "item_type": item_type,
+                "rev": rev,
+                "base_rev": base_rev,
+                "deleted": deleted,
+                "resolve": "keep_client",
+                "blob": blob,
+            }]
+        });
+        let body = post_json(
+            client,
+            &sess.server,
+            &sess.token,
+            &sess.username,
+            "/v1/sync/items",
+            req,
+        )
+        .await?;
+        if let Some(server) = body.get("server") {
+            server_id = server.get("item_id").and_then(|v| v.as_i64()).or(server_id);
+            server_rev = server.get("rev").and_then(|v| v.as_i64()).or(server_rev);
+            continue;
+        }
+        if let Some(err) = body.get("err").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+            anyhow::bail!(err.to_string());
+        }
+        let result = body
+            .get("results")
+            .and_then(Value::as_array)
+            .and_then(|items| items.first())
+            .ok_or_else(|| anyhow::anyhow!("Missing sync result"))?;
+        match result.get("outcome").and_then(Value::as_str) {
+            Some("applied") => {
+                let item_id = result
+                    .get("item_id")
+                    .and_then(Value::as_i64)
+                    .ok_or_else(|| anyhow::anyhow!("Missing server item ID"))?;
+                let rev = result.get("rev").and_then(Value::as_i64).unwrap_or(rev);
+                return Ok((item_id, rev));
+            }
+            Some("conflict") => {
+                if let Some(server) = result.get("server") {
+                    server_id = server.get("item_id").and_then(|v| v.as_i64()).or(server_id);
+                    server_rev = server.get("rev").and_then(|v| v.as_i64()).or(server_rev);
+                    continue;
+                }
+                anyhow::bail!("Xung đột khi ghi đè.");
+            }
+            _ => {
+                let message = result
+                    .get("error")
+                    .and_then(|error| error.get("err"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("Sync item was not applied.");
+                anyhow::bail!(message.to_string());
+            }
+        }
+    }
+    anyhow::bail!("Không ghi đè được sau nhiều lần thử.")
 }
 
 async fn sync_round(
@@ -913,5 +1180,32 @@ mod tests {
         assert_eq!(crate::secrets::load().unwrap().current, "two");
         let _ = crate::secrets::delete();
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn clear_encrypt_key_drops_pending_old_without_rotation() {
+        let _ = crate::secrets::delete();
+        let (mut config, path) = config_file();
+        crate::secrets::store(&crate::secrets::Passphrase {
+            current: "two".into(),
+            old: Some("one".into()),
+        })
+        .unwrap();
+        config.key_revision = 2;
+        let session = clear_encrypt_key(&mut config, &path, Some(&connected())).unwrap();
+        let stored = crate::secrets::load().unwrap();
+        assert!(stored.current.is_empty());
+        assert!(stored.old.is_none());
+        assert_eq!(config.key_revision, 0);
+        assert!(session.unwrap().key.is_none());
+        let _ = crate::secrets::delete();
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn overwrite_revs_follow_the_server_when_the_item_exists() {
+        assert_eq!(overwrite_revs(Some(5), 2), (5, 6));
+        assert_eq!(overwrite_revs(None, 3), (0, 3));
+        assert_eq!(overwrite_revs(None, 0), (0, 1));
     }
 }

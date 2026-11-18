@@ -9,6 +9,8 @@ pub mod store;
 pub mod sync;
 mod theme;
 
+#[cfg(target_os = "android")]
+mod android;
 mod bind;
 mod config;
 mod editor;

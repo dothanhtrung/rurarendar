@@ -160,7 +160,8 @@ fn platform_delete() -> anyhow::Result<()> {
 #[cfg(target_os = "android")]
 fn android_call(method: &str, payload: Option<&str>) -> anyhow::Result<String> {
     use jni::{
-        JavaVM,
+        jni_sig,
+        jni_str,
         objects::{
             JObject,
             JString,
@@ -168,36 +169,36 @@ fn android_call(method: &str, payload: Option<&str>) -> anyhow::Result<String> {
         },
     };
 
-    let context = ndk_context::android_context();
-    let vm = unsafe { JavaVM::from_raw(context.vm().cast()) };
-    vm.attach_current_thread(|env| -> jni::errors::Result<String> {
-        let context_object = unsafe { JObject::from_raw(env, context.context().cast()) };
+    const BRIDGE: &str = "net.onlyesterday.rurarendar.SecretBridge";
+
+    crate::android::with_env(|env, application| {
+        let class = crate::android::load_app_class(env, application, BRIDGE)?;
         match method {
             "store" => {
                 let json = JObject::from(env.new_string(payload.unwrap_or(""))?);
                 env.call_static_method(
-                    jni::jni_str!("net/onlyesterday/rurarendar/SecretBridge"),
-                    jni::jni_str!("store"),
-                    jni::jni_sig!("(Landroid/content/Context;Ljava/lang/String;)V"),
-                    &[JValue::Object(&context_object), JValue::Object(&json)],
+                    &class,
+                    jni_str!("store"),
+                    jni_sig!((android.content.Context, java.lang.String) -> void),
+                    &[JValue::Object(application), JValue::Object(&json)],
                 )?;
                 Ok(String::new())
             }
             "delete" => {
                 env.call_static_method(
-                    jni::jni_str!("net/onlyesterday/rurarendar/SecretBridge"),
-                    jni::jni_str!("delete"),
-                    jni::jni_sig!("(Landroid/content/Context;)V"),
-                    &[JValue::Object(&context_object)],
+                    &class,
+                    jni_str!("delete"),
+                    jni_sig!((android.content.Context) -> void),
+                    &[JValue::Object(application)],
                 )?;
                 Ok(String::new())
             }
             _ => {
                 let result = env.call_static_method(
-                    jni::jni_str!("net/onlyesterday/rurarendar/SecretBridge"),
-                    jni::jni_str!("load"),
-                    jni::jni_sig!("(Landroid/content/Context;)Ljava/lang/String;"),
-                    &[JValue::Object(&context_object)],
+                    &class,
+                    jni_str!("load"),
+                    jni_sig!((android.content.Context) -> java.lang.String),
+                    &[JValue::Object(application)],
                 )?;
                 let obj = result.l()?;
                 if obj.is_null() {

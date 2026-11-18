@@ -596,6 +596,20 @@ pub fn wire(
     {
         let ui_weak = ui.as_weak();
         let sync_tx = sync_tx.clone();
+        ui.global::<Sync>().on_clear_encrypt_key(move || {
+            let Some(ui) = ui_weak.upgrade() else {
+                return;
+            };
+            let s = ui.global::<Sync>();
+            s.set_error(SharedString::new());
+            s.set_status(ui.global::<I18n>().get_clearing_key());
+            s.set_encrypt_key(SharedString::new());
+            let _ = sync_tx.send(SyncCmd::ClearEncryptKey);
+        });
+    }
+    {
+        let ui_weak = ui.as_weak();
+        let sync_tx = sync_tx.clone();
         ui.global::<Sync>().on_sync_now(move || {
             if let Some(ui) = ui_weak.upgrade() {
                 ui.global::<Sync>().set_status(ui.global::<I18n>().get_syncing());
@@ -622,6 +636,17 @@ pub fn wire(
                 ui.global::<Sync>().set_error(SharedString::new());
             }
             let _ = sync_tx.send(SyncCmd::ClearServer);
+        });
+    }
+    {
+        let ui_weak = ui.as_weak();
+        let sync_tx = sync_tx.clone();
+        ui.global::<Sync>().on_overwrite_server(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                ui.global::<Sync>().set_status(ui.global::<I18n>().get_overwriting());
+                ui.global::<Sync>().set_error(SharedString::new());
+            }
+            let _ = sync_tx.send(SyncCmd::ForceOverwrite);
         });
     }
 

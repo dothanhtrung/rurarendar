@@ -1,7 +1,7 @@
 //! Tiết khí year CSVs loaded from `assets/24_solar_terms/YYYY.csv` at runtime.
 //!
 //! Format (no header): `name,d/m,HH:MM` — ICT civil day/month in the file year
-//! and the instant to the minute. Missing year → no marks (DESIGN §4).
+//! and the instant to the minute. Missing year → no marks (`docs/design/calendar.md` §4).
 
 use std::collections::HashMap;
 use std::path::PathBuf;

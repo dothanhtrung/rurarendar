@@ -136,6 +136,19 @@ export component SettingsView inherits Rectangle {
                                 }
                             }
                         }
+                        if (Sync.logged-in): Text {
+                            text: I18n.overwrite-body;
+                            color: Palette.text-secondary;
+                            font-size: 0.9rem;
+                            wrap: word-wrap;
+                        }
+                        if (Sync.logged-in): InkButton {
+                            label: I18n.overwrite-server;
+                            quiet: true;
+                            clicked => {
+                                Sync.overwrite-server();
+                            }
+                        }
                     }
                 }
 
@@ -167,10 +180,21 @@ export component SettingsView inherits Rectangle {
                             text <=> Sync.encrypt-key;
                         }
 
-                        InkButton {
-                            label: I18n.save-key;
-                            clicked => {
-                                Sync.save-encrypt-key();
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+                            InkButton {
+                                label: I18n.save-key;
+                                clicked => {
+                                    Sync.save-encrypt-key();
+                                }
+                            }
+                            InkButton {
+                                label: I18n.clear-key;
+                                quiet: true;
+                                clicked => {
+                                    Sync.clear-encrypt-key();
+                                }
                             }
                         }
                     }

@@ -1,4 +1,4 @@
-//! Embedded lunar month-start CSVs and the year RAM window (DESIGN §3, §4).
+//! Embedded lunar month-start CSVs and the year RAM window (`docs/design/calendar.md`).
 
 use std::collections::HashMap;
 

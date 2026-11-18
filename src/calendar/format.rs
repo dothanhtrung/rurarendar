@@ -122,7 +122,7 @@ pub fn tiet_khi_label(id: u8, lang: UiLang) -> &'static str {
     pick(&copy(lang).tiet_khi, (id.saturating_sub(1) as usize).min(23))
 }
 
-/// Month/week cell label: `15`, `1/5`, or `1/5+` on a leap month-start (DESIGN §8.3).
+/// Month/week cell label: `15`, `1/5`, or `1/5+` on a leap month-start (`docs/design/client.md` §8.3).
 pub fn lunar_cell_label(lunar: &LunarDate) -> String {
     if lunar.day == 1 {
         if lunar.leap {

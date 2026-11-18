@@ -200,9 +200,11 @@ export global Sync {
     in-out property <bool> logged-in: false;
     callback save-account();
     callback save-encrypt-key();
+    callback clear-encrypt-key();
     callback sync-now();
     callback disconnect();
     callback clear-server();
+    callback overwrite-server();
 }
 
 export global Calendar {

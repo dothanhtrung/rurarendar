@@ -1,5 +1,5 @@
 //! Hồ Ngọc Đức lunisolar conversion (ICT, UTC+7). Used only when a month-start
-//! CSV does not cover the date (DESIGN §4, SPEC §5.2).
+//! CSV does not cover the date (`docs/design/calendar.md` §4, `docs/SPEC.md` §5.2).
 
 use crate::calendar::convert::{
     ConvertError,

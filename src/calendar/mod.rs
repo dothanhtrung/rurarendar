@@ -1,4 +1,4 @@
-//! Client calendar math. No sqlx, Slint, or actix (DESIGN §2).
+//! Client calendar math. No sqlx, Slint, or actix (`docs/DESIGN.md` §2).
 
 mod algorithm;
 mod assets;
